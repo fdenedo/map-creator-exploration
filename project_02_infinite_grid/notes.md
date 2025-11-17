@@ -109,3 +109,4 @@ Things left to think about:
 
 - Camera-relative rendering: My current float coordinates will break down at very large values. Remember that, if the range is the same, the GPU doesn't necessarily care if im looking at points near the origin or 1 million units away from it. Perhaps try it here - see if it breaks when going really far away (move the camera programattically)
 - Projection, View, Model matrices: right now my 2D camera matrix handles aspect ratio. This goes away with a proper MVP matrix strategy :)
+- Maybe think about adding minor/major grid lines
