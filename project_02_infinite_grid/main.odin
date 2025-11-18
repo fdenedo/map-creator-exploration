@@ -104,8 +104,8 @@ frame :: proc "c" () {
     for i := 0; i < num_horizontal_lines; i += 1 {
         y := first_position.y + f32(i) * grid_spacing
         append(&state.vertices,
-            first_position.x - grid_spacing, y,
-            first_position.x + grid_spacing * f32(num_vertical_lines), y
+            first_position.x - grid_spacing,                            y,
+            first_position.x + grid_spacing * f32(num_vertical_lines),  y
         )
     }
 
