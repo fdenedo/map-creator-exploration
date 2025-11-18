@@ -8,7 +8,7 @@ import sapp "shared:sokol/app"
 import sg "shared:sokol/gfx"
 import shelpers "shared:sokol/helpers"
 
-SAMPLES_GUESS :: 30
+SAMPLES_GUESS :: 30 // TODO: Adaptive Sampling
 
 ScreenVec2  :: distinct [2]f32
 WorldVec2   :: distinct [2]f32
@@ -70,6 +70,7 @@ init :: proc "c" () {
 
     state.shader = sg.make_shader(main_shader_desc(sg.query_backend()))
 
+    // TODO: pipelines for handles and guide lines
     state.pipeline = sg.make_pipeline({
         shader = state.shader,
         primitive_type = .LINE_STRIP,
