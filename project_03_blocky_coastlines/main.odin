@@ -1,12 +1,12 @@
 package main
 
-import sapp "shared:sokol/app"
-import sg "shared:sokol/gfx"
-import shelpers "shared:sokol/helpers"
 import "base:runtime"
 import "core:c"
 import "core:log"
 import "core:math/linalg"
+import sapp "shared:sokol/app"
+import sg "shared:sokol/gfx"
+import shelpers "shared:sokol/helpers"
 
 default_context: runtime.Context
 
