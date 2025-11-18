@@ -33,6 +33,7 @@ state: struct {
     vertices: [(SAMPLES_GUESS+1)][2]f32,
     control_points: [4]ControlPoint,
     dragging_point: Maybe(int),
+    can_pick_up: bool,
 }
 
 default_context: runtime.Context
@@ -107,6 +108,7 @@ init :: proc "c" () {
     })
 
     state.camera.zoom = 1.0
+    state.can_pick_up = true
 }
 
 frame :: proc "c" () {
@@ -141,6 +143,35 @@ cleanup :: proc "c" () {
 
 event :: proc "c" (e: ^sapp.Event) {
     context = default_context
+
+    #partial switch e.type {
+    case .MOUSE_SCROLL:
+        state.camera.zoom += e.scroll_y * 0.1
+        state.camera.zoom = min(20.0, max(state.camera.zoom, 0.5))
+    case .MOUSE_DOWN:
+        if e.mouse_button != .LEFT do break
+        if !state.can_pick_up do break
+
+        mouse_world_pos := screen_to_world(ScreenVec2{ e.mouse_x, e.mouse_y }, true)
+        for control_point, index in state.control_points {
+            if linalg.vector_length(control_point.pos - mouse_world_pos) < 0.5 {
+                state.dragging_point = index
+            }
+        }
+
+        state.can_pick_up = false
+    case .MOUSE_MOVE:
+        mouse := ScreenVec2{ e.mouse_x, e.mouse_y }
+        if state.dragging_point != nil {
+            state.control_points[state.dragging_point.?].pos = screen_to_world(mouse, true)
+        }
+    case .MOUSE_UP:
+        if e.mouse_button != .LEFT do break
+        state.dragging_point = nil
+        state.can_pick_up = true
+    }
+
+    update_render()
 }
 
 camera_matrix :: proc(camera: Camera, aspect_ratio: f32) -> Matrix4 {
@@ -187,4 +218,24 @@ evaluate_bezier_cubic :: proc(p0, p1, p2, p3: [2]f32, t: f32) -> [2]f32 {
     b1 := lerp2d(a1, a2, t)
 
     return lerp2d(b0, b1, t)
+}
+
+update_render :: proc() {
+    state.vertices[0] = cast([2]f32) state.control_points[0].pos
+    t_delta := 1.0 / f32(SAMPLES_GUESS)
+    for i in 0..=SAMPLES_GUESS {
+        state.vertices[i] = evaluate_bezier_cubic(
+            cast([2]f32) state.control_points[0].pos,
+            cast([2]f32) state.control_points[1].pos,
+            cast([2]f32) state.control_points[2].pos,
+            cast([2]f32) state.control_points[3].pos,
+            0 + t_delta * f32(i)
+        )
+    }
+
+    // Note: for update, I still need to provide pointer and size
+    sg.update_buffer(state.v_buffer, {
+        ptr = &state.vertices,
+        size = c.size_t(len(&state.vertices) * size_of([2]f32))
+    })
 }
