@@ -56,10 +56,6 @@ init :: proc "c" () {
         logger = sg.Logger(shelpers.logger(&default_context)),
     })
 
-    // state.pass_action = {
-    //     colors = { 0 = { load_action = .CLEAR, clear_value = { 0, 0, 0, 1 } } },
-    // }
-
     state.shader = sg.make_shader(main_shader_desc(sg.query_backend()))
     state.pipeline = sg.make_pipeline({
         shader = state.shader,
