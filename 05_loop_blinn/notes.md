@@ -7,3 +7,5 @@ Another question I need to answer now is how to actually tackle the triangulatio
 Options:
 - libtess2 - A tesselation library written in C. I would have to try my hand at building bindings for Odin to call into that code, might be a good learning opportunity
 - my own algorithm - I'll probably do this eventually, just to get a feel for the principles behind it, but I'm leaning away from this in favour of the library approach
+
+I think for this project right now, I'll focus on making the code a bit more modular, as there is a lot of code I will want to reuse going forward, and starting with a simple toy project that demonstrated Loop-Blinn working, so I can easily port that and get it working with the more sophisticated spline drawing I want to get involved with in the next project. I'll also want to bring the code that closes "coastlines" from project 2.
