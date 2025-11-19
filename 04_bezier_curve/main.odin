@@ -31,11 +31,11 @@ state: struct {
     aspect_ratio: f32,
     camera: Camera,
     pass_action: sg.Pass_Action,
-    curve_shader, handle_shader: sg.Shader,
+    shader: sg.Shader,
     curve_pipeline, handle_pipeline: sg.Pipeline,
     curve_v_buffer, handle_buffer: sg.Buffer,
     vertices: [SAMPLES_GUESS+1][2]f32,
-    control_point_render_data: [50]f32, // Obvs make sure
+    handle_data: [16][2]f32,
     control_points: [4]ControlPoint,
     dragging_point: Maybe(int),
     can_pick_up: bool,
@@ -73,8 +73,7 @@ init :: proc "c" () {
         colors = { 0 = { load_action = .CLEAR, clear_value = { 1, 1, 1, 1 } } },
     }
 
-    state.curve_shader = sg.make_shader(curve_shader_desc(sg.query_backend()))
-    state.handle_shader = sg.make_shader(handle_shader_desc(sg.query_backend()))
+    state.shader = sg.make_shader(main_shader_desc(sg.query_backend()))
 
     state.control_points = {
         ControlPoint { pos = {-0.75, -0.25}, render_size = SIZE_HANDLE_ON_CURVE  },
@@ -84,11 +83,11 @@ init :: proc "c" () {
     }
 
     state.curve_pipeline = sg.make_pipeline({
-        shader = state.curve_shader,
+        shader = state.shader,
         primitive_type = .LINE_STRIP,
         layout = {
             attrs = {
-                ATTR_curve_position = { format = .FLOAT2 }
+                ATTR_main_position = { format = .FLOAT2 }
             }
         },
     })
@@ -113,20 +112,26 @@ init :: proc "c" () {
     })
 
     state.handle_pipeline = sg.make_pipeline({
-        shader = state.handle_shader,
-        primitive_type = .POINTS,
+        shader = state.shader,
+        primitive_type = .LINES,
         layout = {
             attrs = {
-                ATTR_handle_position = { format = .FLOAT2 },
-                ATTR_handle_size = { format = .FLOAT }
+                ATTR_main_position = { format = .FLOAT2 },
             }
         },
     })
 
+    for point, i in state.control_points {
+        state.handle_data[i*4 + 0] = cast([2]f32)(state.control_points[i].pos + screen_to_world({ 3,  3}, false))
+        state.handle_data[i*4 + 1] = cast([2]f32)(state.control_points[i].pos - screen_to_world({ 3,  3}, false))
+        state.handle_data[i*4 + 2] = cast([2]f32)(state.control_points[i].pos + screen_to_world({-3,  3}, false))
+        state.handle_data[i*4 + 3] = cast([2]f32)(state.control_points[i].pos + screen_to_world({ 3, -3}, false))
+    }
+
     state.handle_buffer = sg.make_buffer({
         data = {
-            ptr = &state.control_points,
-            size = c.size_t(len(state.control_points) * size_of(ControlPoint))
+            ptr = &state.handle_data,
+            size = c.size_t(len(state.handle_data) * size_of([2]f32))
         },
         usage = { dynamic_update = true }
     })
@@ -157,7 +162,7 @@ frame :: proc "c" () {
 	sg.apply_pipeline(state.handle_pipeline)
 	sg.apply_bindings({ vertex_buffers = { 0 = state.handle_buffer } })
 	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	sg.draw(0, len(state.control_points), 1)
+	sg.draw(0, len(state.handle_data), 1)
 
 	sg.end_pass()
     sg.commit()
@@ -179,7 +184,6 @@ event :: proc "c" (e: ^sapp.Event) {
         if e.mouse_button != .LEFT do break
         if !state.can_pick_up do break
 
-        // mouse_world_pos := screen_to_world(ScreenVec2{ e.mouse_x, e.mouse_y }, true)
         mouse := ScreenVec2{ e.mouse_x, e.mouse_y }
         for control_point, index in state.control_points {
             if linalg.vector_length(world_to_screen(control_point.pos, true) - mouse) < 8 {
@@ -285,8 +289,15 @@ update_render :: proc() {
         size = c.size_t(len(&state.vertices) * size_of([2]f32))
     })
 
+    for point, i in state.control_points {
+        state.handle_data[i*4 + 0] = cast([2]f32)(state.control_points[i].pos + screen_to_world({ 3,  3}, false))
+        state.handle_data[i*4 + 1] = cast([2]f32)(state.control_points[i].pos - screen_to_world({ 3,  3}, false))
+        state.handle_data[i*4 + 2] = cast([2]f32)(state.control_points[i].pos + screen_to_world({-3,  3}, false))
+        state.handle_data[i*4 + 3] = cast([2]f32)(state.control_points[i].pos + screen_to_world({ 3, -3}, false))
+    }
+
     sg.update_buffer(state.handle_buffer, {
-        ptr = &state.control_points,
-        size = c.size_t(len(state.control_points) * size_of(ControlPoint))
+        ptr = &state.handle_data,
+        size = c.size_t(len(state.handle_data) * size_of([2]f32))
     })
 }

@@ -49,3 +49,56 @@ sg.draw(0, len(state.control_points), 1)
 sg.end_pass()
 sg.commit()
 ```
+
+Adding a multi-shader pattern to my notes (even though it's unnecessary)
+
+```glsl
+@header package main
+@header import sg "shared:sokol/gfx"
+
+@vs vs_curve
+
+layout(binding=0) uniform vs_params {
+    mat4 u_camera_matrix;
+};
+
+in vec2 position;
+
+void main() {
+    vec4 pos_homogeneous = vec4(position, 0.0, 1.0);
+    vec4 transformed = u_camera_matrix * pos_homogeneous;
+
+    gl_Position = vec4(transformed.xy, 0.0, 1.0);
+}
+@end
+
+@vs vs_handle
+
+layout(binding=0) uniform vs_params {
+    mat4 u_camera_matrix;
+};
+
+in vec2 position;
+
+void main() {
+    vec4 pos_homogeneous = vec4(position, 0.0, 1.0);
+    vec4 transformed = u_camera_matrix * pos_homogeneous;
+
+    gl_Position = vec4(transformed.xy, 0.0, 1.0);
+}
+@end
+
+@fs fs
+
+out vec4 color;
+
+void main() {
+    color = vec4(0.0, 0.0, 0.0, 1.0);
+}
+@end
+
+@program curve vs_curve fs
+@program handle vs_handle fs
+```
+
+Something that may be worth noting, things seem to pop in on the application. Perhaps I need to make sure I've drawn everything before displaying anything?
