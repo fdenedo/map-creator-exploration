@@ -17,11 +17,6 @@ ScreenVec2  :: distinct [2]f32
 WorldVec2   :: distinct [2]f32
 Matrix4     :: matrix[4, 4]f32
 
-Camera :: struct {
-    pos: WorldVec2,
-    zoom: f32,
-}
-
 ControlPoint :: struct {
     pos: WorldVec2,
 }
@@ -214,85 +209,8 @@ event :: proc "c" (e: ^sapp.Event) {
     update_render()
 }
 
-camera_matrix :: proc(camera: Camera, aspect_ratio: f32) -> Matrix4 {
-    z := camera.zoom
-    a := aspect_ratio
-
-    return Matrix4{
-        z,    0,    0,    -camera.pos.x * z,
-        0,  a*z,    0,    -camera.pos.y * a * z,
-        0,    0,    1,     0,
-        0,    0,    0,     1,
-    }
-}
-
-screen_pixel_to_ndc :: proc(vec2: ScreenVec2, translate: bool) -> [2]f32 {
-    translation: f32 = translate ? 1.0 : 0.0
-    return [2]f32{
-             (vec2.x / sapp.widthf())  * 2.0 - translation,
-            -(vec2.y / sapp.heightf()) * 2.0 + translation,
-        }
-}
-
-ndc_to_screen_pixel :: proc(vec2: [2]f32, translate: bool) -> ScreenVec2 {
-    translation: f32 = translate ? 1.0 : 0.0
-    return ScreenVec2{
-             ((vec2.x + translation) / 2.0) * sapp.widthf(),
-            (-(vec2.y - translation) / 2.0) * sapp.heightf(),
-        }
-}
-
-screen_to_world :: proc(vec2: ScreenVec2, translate: bool) -> WorldVec2 {
-    homogenous: f32 = translate ? 1.0 : 0.0
-    ndc            := screen_pixel_to_ndc(vec2, translate)
-    cam_matrix     := camera_matrix(state.camera, state.aspect_ratio)
-    inverse        := linalg.matrix4_inverse(cam_matrix)
-
-    ndc_homogeneous     := [4]f32{ndc.x, ndc.y, 0.0, homogenous}
-    world_homogeneous   := inverse * ndc_homogeneous
-    return WorldVec2(world_homogeneous.xy)
-}
-
-world_to_screen :: proc(vec2: WorldVec2, translate: bool) -> ScreenVec2 {
-    homogenous: f32 = translate ? 1.0 : 0.0
-    cam_matrix     := camera_matrix(state.camera, state.aspect_ratio)
-
-    world_homogenous    := [4]f32{vec2.x, vec2.y, 0.0, homogenous}
-    screen_homogenous   := cam_matrix * world_homogenous
-    pixel               := ndc_to_screen_pixel(screen_homogenous.xy, translate)
-    return ScreenVec2(pixel)
-}
-
 lerp2d :: proc(a, b: [2]f32, t: f32) -> [2]f32 {
     return (b - a) * t + a
-}
-
-evaluate_bezier_cubic :: proc(p0, p1, p2, p3: [2]f32, t: f32) -> [2]f32 {
-    a0 := lerp2d(p0, p1, t)
-    a1 := lerp2d(p1, p2, t)
-    a2 := lerp2d(p2, p3, t)
-
-    b0 := lerp2d(a0, a1, t)
-    b1 := lerp2d(a1, a2, t)
-
-    return lerp2d(b0, b1, t)
-}
-
-// function to check if we need more samples (because the curve is very curved) or
-// less samples (because the curve is kinda flat)
-is_flat_enough :: proc(p0, p1, p2, p3: [2]f32, tolerance: f32) -> bool {
-    line := p3 - p0
-    line_length := linalg.vector_length(line)
-
-    if line_length < 0.001 {
-        return true  // start and end are same point
-    }
-
-    // Cross product gives area made by two vectors (parallelogram)
-    dist1 := abs(linalg.vector_cross2(p1 - p0, line)) / line_length
-    dist2 := abs(linalg.vector_cross2(p2 - p0, line)) / line_length
-
-    return max(dist1, dist2) < tolerance
 }
 
 update_render :: proc() {
