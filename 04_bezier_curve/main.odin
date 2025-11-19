@@ -10,9 +10,6 @@ import shelpers "shared:sokol/helpers"
 
 SAMPLES_GUESS :: 30 // TODO: Adaptive Sampling
 
-SIZE_HANDLE_ON_CURVE  :: 10
-SIZE_HANDLE_OFF_CURVE :: 5
-
 ScreenVec2  :: distinct [2]f32
 WorldVec2   :: distinct [2]f32
 Matrix4     :: matrix[4, 4]f32
@@ -24,7 +21,6 @@ Camera :: struct {
 
 ControlPoint :: struct {
     pos: WorldVec2,
-    render_size: f32
 }
 
 state: struct {
@@ -76,10 +72,10 @@ init :: proc "c" () {
     state.shader = sg.make_shader(main_shader_desc(sg.query_backend()))
 
     state.control_points = {
-        ControlPoint { pos = {-0.75, -0.25}, render_size = SIZE_HANDLE_ON_CURVE  },
-        ControlPoint { pos = {-0.5,   0.25}, render_size = SIZE_HANDLE_OFF_CURVE },
-        ControlPoint { pos = { 0.5,   0.25}, render_size = SIZE_HANDLE_OFF_CURVE },
-        ControlPoint { pos = { 0.75, -0.25}, render_size = SIZE_HANDLE_ON_CURVE  },
+        ControlPoint { pos = {-0.75, -0.25} },
+        ControlPoint { pos = {-0.5,   0.25} },
+        ControlPoint { pos = { 0.5,   0.25} },
+        ControlPoint { pos = { 0.75, -0.25} },
     }
 
     state.curve_pipeline = sg.make_pipeline({
