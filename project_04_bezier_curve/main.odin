@@ -10,6 +10,9 @@ import shelpers "shared:sokol/helpers"
 
 SAMPLES_GUESS :: 30 // TODO: Adaptive Sampling
 
+SIZE_HANDLE_ON_CURVE  :: 10
+SIZE_HANDLE_OFF_CURVE :: 5
+
 ScreenVec2  :: distinct [2]f32
 WorldVec2   :: distinct [2]f32
 Matrix4     :: matrix[4, 4]f32
@@ -20,17 +23,19 @@ Camera :: struct {
 }
 
 ControlPoint :: struct {
-    pos: WorldVec2
+    pos: WorldVec2,
+    render_size: f32
 }
 
 state: struct {
     aspect_ratio: f32,
     camera: Camera,
     pass_action: sg.Pass_Action,
-    shader: sg.Shader,
-    pipeline: sg.Pipeline,
-    v_buffer: sg.Buffer,
-    vertices: [(SAMPLES_GUESS+1)][2]f32,
+    curve_shader, handle_shader: sg.Shader,
+    curve_pipeline, handle_pipeline: sg.Pipeline,
+    curve_v_buffer, handle_buffer: sg.Buffer,
+    vertices: [SAMPLES_GUESS+1][2]f32,
+    control_point_render_data: [50]f32, // Obvs make sure
     control_points: [4]ControlPoint,
     dragging_point: Maybe(int),
     can_pick_up: bool,
@@ -68,27 +73,26 @@ init :: proc "c" () {
         colors = { 0 = { load_action = .CLEAR, clear_value = { 1, 1, 1, 1 } } },
     }
 
-    state.shader = sg.make_shader(main_shader_desc(sg.query_backend()))
+    state.curve_shader = sg.make_shader(curve_shader_desc(sg.query_backend()))
+    state.handle_shader = sg.make_shader(handle_shader_desc(sg.query_backend()))
 
-    // TODO: pipelines for handles and guide lines
-    state.pipeline = sg.make_pipeline({
-        shader = state.shader,
+    state.control_points = {
+        ControlPoint { pos = {-0.75, -0.25}, render_size = SIZE_HANDLE_ON_CURVE  },
+        ControlPoint { pos = {-0.5,   0.25}, render_size = SIZE_HANDLE_OFF_CURVE },
+        ControlPoint { pos = { 0.5,   0.25}, render_size = SIZE_HANDLE_OFF_CURVE },
+        ControlPoint { pos = { 0.75, -0.25}, render_size = SIZE_HANDLE_ON_CURVE  },
+    }
+
+    state.curve_pipeline = sg.make_pipeline({
+        shader = state.curve_shader,
         primitive_type = .LINE_STRIP,
         layout = {
             attrs = {
-                ATTR_main_position = { format = .FLOAT2 }
+                ATTR_curve_position = { format = .FLOAT2 }
             }
         },
     })
 
-    state.control_points = {
-        ControlPoint { pos = {-0.75, -0.25}},
-        ControlPoint { pos = {-0.5,   0.25}},
-        ControlPoint { pos = { 0.5,   0.25}},
-        ControlPoint { pos = { 0.75, -0.25}},
-    }
-
-    state.vertices[0] = cast([2]f32) state.control_points[0].pos
     t_delta := 1.0 / f32(SAMPLES_GUESS)
     for i in 0..=SAMPLES_GUESS {
         state.vertices[i] = evaluate_bezier_cubic(
@@ -100,10 +104,29 @@ init :: proc "c" () {
         )
     }
 
-    state.v_buffer = sg.make_buffer({
+    state.curve_v_buffer = sg.make_buffer({
         data = {
             ptr = &state.vertices,
-            size = c.size_t(len(&state.vertices) * size_of([2]f32))
+            size = c.size_t(len(state.vertices) * size_of([2]f32))
+        },
+        usage = { dynamic_update = true }
+    })
+
+    state.handle_pipeline = sg.make_pipeline({
+        shader = state.handle_shader,
+        primitive_type = .POINTS,
+        layout = {
+            attrs = {
+                ATTR_handle_position = { format = .FLOAT2 },
+                ATTR_handle_size = { format = .FLOAT }
+            }
+        },
+    })
+
+    state.handle_buffer = sg.make_buffer({
+        data = {
+            ptr = &state.control_points,
+            size = c.size_t(len(state.control_points) * size_of(ControlPoint))
         },
         usage = { dynamic_update = true }
     })
@@ -121,19 +144,22 @@ frame :: proc "c" () {
         swapchain = shelpers.glue_swapchain()
     })
 
-    sg.apply_pipeline(state.pipeline)
-    sg.apply_bindings({
-        vertex_buffers = { 0 = state.v_buffer }
-    })
-
     camera_mat := camera_matrix(state.camera, state.aspect_ratio)
     uniforms := Vs_Params {
 	    u_camera_matrix = transmute([16]f32)camera_mat,
 	}
-	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
 
+    sg.apply_pipeline(state.curve_pipeline)
+    sg.apply_bindings({ vertex_buffers = { 0 = state.curve_v_buffer } })
+    sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
 	sg.draw(0, len(state.vertices), 1)
-    sg.end_pass()
+
+	sg.apply_pipeline(state.handle_pipeline)
+	sg.apply_bindings({ vertex_buffers = { 0 = state.handle_buffer } })
+	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+	sg.draw(0, len(state.control_points), 1)
+
+	sg.end_pass()
     sg.commit()
 }
 
@@ -235,8 +261,13 @@ update_render :: proc() {
     }
 
     // Note: for update, I still need to provide pointer and size
-    sg.update_buffer(state.v_buffer, {
+    sg.update_buffer(state.curve_v_buffer, {
         ptr = &state.vertices,
         size = c.size_t(len(&state.vertices) * size_of([2]f32))
+    })
+
+    sg.update_buffer(state.handle_buffer, {
+        ptr = &state.control_points,
+        size = c.size_t(len(state.control_points) * size_of(ControlPoint))
     })
 }
