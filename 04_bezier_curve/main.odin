@@ -8,7 +8,8 @@ import sapp "shared:sokol/app"
 import sg "shared:sokol/gfx"
 import shelpers "shared:sokol/helpers"
 
-SAMPLES_GUESS :: 30 // TODO: Adaptive Sampling
+SAMPLES_CURVED   :: 30
+SAMPLES_STRAIGHT :: 2
 
 ScreenVec2  :: distinct [2]f32
 WorldVec2   :: distinct [2]f32
@@ -30,11 +31,12 @@ state: struct {
     shader: sg.Shader,
     curve_pipeline, handle_pipeline: sg.Pipeline,
     curve_v_buffer, handle_buffer: sg.Buffer,
-    vertices: [SAMPLES_GUESS+1][2]f32,
+    vertices: [SAMPLES_CURVED + 1][2]f32,
     handle_data: [16][2]f32,
     control_points: [4]ControlPoint,
     dragging_point: Maybe(int),
     can_pick_up: bool,
+    num_samples: int,
 }
 
 default_context: runtime.Context
@@ -88,8 +90,16 @@ init :: proc "c" () {
         },
     })
 
-    t_delta := 1.0 / f32(SAMPLES_GUESS)
-    for i in 0..=SAMPLES_GUESS {
+    state.num_samples = is_flat_enough(
+        ([2]f32)(state.control_points[0].pos),
+        ([2]f32)(state.control_points[1].pos),
+        ([2]f32)(state.control_points[2].pos),
+        ([2]f32)(state.control_points[3].pos),
+        0.1
+    ) ? SAMPLES_STRAIGHT : SAMPLES_CURVED
+
+    t_delta := 1.0 / f32(state.num_samples)
+    for i in 0..=state.num_samples {
         state.vertices[i] = evaluate_bezier_cubic(
             cast([2]f32) state.control_points[0].pos,
             cast([2]f32) state.control_points[1].pos,
@@ -102,7 +112,7 @@ init :: proc "c" () {
     state.curve_v_buffer = sg.make_buffer({
         data = {
             ptr = &state.vertices,
-            size = c.size_t(len(state.vertices) * size_of([2]f32))
+            size = c.size_t((state.num_samples + 1) * size_of([2]f32))
         },
         usage = { dynamic_update = true }
     })
@@ -153,7 +163,7 @@ frame :: proc "c" () {
     sg.apply_pipeline(state.curve_pipeline)
     sg.apply_bindings({ vertex_buffers = { 0 = state.curve_v_buffer } })
     sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	sg.draw(0, len(state.vertices), 1)
+	sg.draw(0, state.num_samples + 1, 1)
 
 	sg.apply_pipeline(state.handle_pipeline)
 	sg.apply_bindings({ vertex_buffers = { 0 = state.handle_buffer } })
@@ -266,10 +276,34 @@ evaluate_bezier_cubic :: proc(p0, p1, p2, p3: [2]f32, t: f32) -> [2]f32 {
     return lerp2d(b0, b1, t)
 }
 
+// function to check if we need more samples (because the curve is very curved) or
+// less samples (because the curve is kinda flat)
+is_flat_enough :: proc(p0, p1, p2, p3: [2]f32, tolerance: f32) -> bool {
+    line := p3 - p0
+    line_length := linalg.vector_length(line)
+
+    if line_length < 0.001 {
+        return true  // start and end are same point
+    }
+
+    // Cross product gives area made by two vectors (parallelogram)
+    dist1 := abs(linalg.vector_cross2(p1 - p0, line)) / line_length
+    dist2 := abs(linalg.vector_cross2(p2 - p0, line)) / line_length
+
+    return max(dist1, dist2) < tolerance
+}
+
 update_render :: proc() {
-    state.vertices[0] = cast([2]f32) state.control_points[0].pos
-    t_delta := 1.0 / f32(SAMPLES_GUESS)
-    for i in 0..=SAMPLES_GUESS {
+    state.num_samples = is_flat_enough(
+        ([2]f32)(state.control_points[0].pos),
+        ([2]f32)(state.control_points[1].pos),
+        ([2]f32)(state.control_points[2].pos),
+        ([2]f32)(state.control_points[3].pos),
+        0.1
+    ) ? SAMPLES_STRAIGHT : SAMPLES_CURVED
+
+    t_delta := 1.0 / f32(state.num_samples)
+    for i in 0..=state.num_samples {
         state.vertices[i] = evaluate_bezier_cubic(
             cast([2]f32) state.control_points[0].pos,
             cast([2]f32) state.control_points[1].pos,
@@ -282,7 +316,7 @@ update_render :: proc() {
     // Note: for update, I still need to provide pointer and size
     sg.update_buffer(state.curve_v_buffer, {
         ptr = &state.vertices,
-        size = c.size_t(len(&state.vertices) * size_of([2]f32))
+        size = c.size_t((state.num_samples + 1) * size_of([2]f32))
     })
 
     for point, i in state.control_points {
