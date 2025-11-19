@@ -181,7 +181,8 @@ event :: proc "c" (e: ^sapp.Event) {
 
         mouse_world_pos := screen_to_world(ScreenVec2{ e.mouse_x, e.mouse_y }, true)
         for control_point, index in state.control_points {
-            if linalg.vector_length(control_point.pos - mouse_world_pos) < 0.5 {
+            // Note: to be honest, here we would want to do the distance check in screen space
+            if linalg.vector_length(control_point.pos - mouse_world_pos) < 0.05 {
                 state.dragging_point = index
             }
         }

@@ -22,3 +22,30 @@ Then I bumped into another interesting issue. It turns out that the idea of a "p
 There's also the consideration that even though the position of the handles is defined in world-space, the size and interactivity of them should be defined in screen space (when really zoomed in, you don't want the handles to become imperceptible).
 
 It might be useful here to also think about instancing. For this project, we'll just draw handles as small x's and leave that for Project 6 (where we actually create the base editor).
+
+To make note of the pattern I used to orchestrate the two pipelines:
+
+```odin
+sg.begin_pass({
+    action = state.pass_action,
+    swapchain = shelpers.glue_swapchain()
+})
+
+camera_mat := camera_matrix(state.camera, state.aspect_ratio)
+uniforms := Vs_Params {
+    u_camera_matrix = transmute([16]f32)camera_mat,
+}
+
+sg.apply_pipeline(state.curve_pipeline)
+sg.apply_bindings({ vertex_buffers = { 0 = state.curve_v_buffer } })
+sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+sg.draw(0, len(state.vertices), 1)
+
+sg.apply_pipeline(state.handle_pipeline)
+sg.apply_bindings({ vertex_buffers = { 0 = state.handle_buffer } })
+sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+sg.draw(0, len(state.control_points), 1)
+
+sg.end_pass()
+sg.commit()
+```
