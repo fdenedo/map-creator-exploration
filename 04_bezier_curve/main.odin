@@ -8,6 +8,8 @@ import sapp "shared:sokol/app"
 import sg "shared:sokol/gfx"
 import shelpers "shared:sokol/helpers"
 
+// this is ridiculously basic (not really good enough for any real application)
+// however, wne using Loop-Blinn, this probably won't be necessary
 SAMPLES_CURVED   :: 30
 SAMPLES_STRAIGHT :: 2
 
