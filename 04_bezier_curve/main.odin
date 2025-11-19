@@ -179,10 +179,10 @@ event :: proc "c" (e: ^sapp.Event) {
         if e.mouse_button != .LEFT do break
         if !state.can_pick_up do break
 
-        mouse_world_pos := screen_to_world(ScreenVec2{ e.mouse_x, e.mouse_y }, true)
+        // mouse_world_pos := screen_to_world(ScreenVec2{ e.mouse_x, e.mouse_y }, true)
+        mouse := ScreenVec2{ e.mouse_x, e.mouse_y }
         for control_point, index in state.control_points {
-            // Note: to be honest, here we would want to do the distance check in screen space
-            if linalg.vector_length(control_point.pos - mouse_world_pos) < 0.05 {
+            if linalg.vector_length(world_to_screen(control_point.pos, true) - mouse) < 8 {
                 state.dragging_point = index
             }
         }
@@ -222,6 +222,14 @@ screen_pixel_to_ndc :: proc(vec2: ScreenVec2, translate: bool) -> [2]f32 {
         }
 }
 
+ndc_to_screen_pixel :: proc(vec2: [2]f32, translate: bool) -> ScreenVec2 {
+    translation: f32 = translate ? 1.0 : 0.0
+    return ScreenVec2{
+             ((vec2.x + translation) / 2.0) * sapp.widthf(),
+            (-(vec2.y - translation) / 2.0) * sapp.heightf(),
+        }
+}
+
 screen_to_world :: proc(vec2: ScreenVec2, translate: bool) -> WorldVec2 {
     homogenous: f32 = translate ? 1.0 : 0.0
     ndc            := screen_pixel_to_ndc(vec2, translate)
@@ -231,6 +239,16 @@ screen_to_world :: proc(vec2: ScreenVec2, translate: bool) -> WorldVec2 {
     ndc_homogeneous     := [4]f32{ndc.x, ndc.y, 0.0, homogenous}
     world_homogeneous   := inverse * ndc_homogeneous
     return WorldVec2(world_homogeneous.xy)
+}
+
+world_to_screen :: proc(vec2: WorldVec2, translate: bool) -> ScreenVec2 {
+    homogenous: f32 = translate ? 1.0 : 0.0
+    cam_matrix     := camera_matrix(state.camera, state.aspect_ratio)
+
+    world_homogenous    := [4]f32{vec2.x, vec2.y, 0.0, homogenous}
+    screen_homogenous   := cam_matrix * world_homogenous
+    pixel               := ndc_to_screen_pixel(screen_homogenous.xy, translate)
+    return ScreenVec2(pixel)
 }
 
 lerp2d :: proc(a, b: [2]f32, t: f32) -> [2]f32 {
