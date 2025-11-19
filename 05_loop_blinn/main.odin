@@ -8,8 +8,6 @@ import sapp "shared:sokol/app"
 import sg "shared:sokol/gfx"
 import shelpers "shared:sokol/helpers"
 
-// this is ridiculously basic (not really good enough for any real application)
-// however, wne using Loop-Blinn, this probably won't be necessary
 SAMPLES_CURVED   :: 30
 SAMPLES_STRAIGHT :: 2
 
@@ -63,6 +61,8 @@ init :: proc "c" () {
         allocator = sg.Allocator(shelpers.allocator(&default_context)),
         logger = sg.Logger(shelpers.logger(&default_context)),
     })
+
+    state.camera = create_camera()
 
     state.pass_action = {
         colors = { 0 = { load_action = .CLEAR, clear_value = { 1, 1, 1, 1 } } },
@@ -139,20 +139,19 @@ init :: proc "c" () {
         usage = { dynamic_update = true }
     })
 
-    state.camera.zoom = 1.0
     state.can_pick_up = true
 }
 
 frame :: proc "c" () {
     context = default_context
-    state.aspect_ratio = sapp.widthf() / sapp.heightf()
+    state.camera.aspect_ratio = sapp.widthf() / sapp.heightf() // TODO: Calculated on init now, probably listen to window resize event
 
     sg.begin_pass({
         action = state.pass_action,
         swapchain = shelpers.glue_swapchain()
     })
 
-    camera_mat := camera_matrix(state.camera, state.aspect_ratio)
+    camera_mat := camera_matrix(state.camera)
     uniforms := Vs_Params {
 	    u_camera_matrix = transmute([16]f32)camera_mat,
 	}
