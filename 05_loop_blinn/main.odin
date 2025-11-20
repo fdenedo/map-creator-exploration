@@ -10,6 +10,7 @@ import shelpers "shared:sokol/helpers"
 
 SAMPLES_CURVED   :: 30
 SAMPLES_STRAIGHT :: 2
+TRIANGLE_SAMPLES :: 16
 
 ScreenVec2  :: distinct [2]f32
 WorldVec2   :: distinct [2]f32
@@ -24,11 +25,12 @@ state: struct {
     camera: Camera,
     pass_action: sg.Pass_Action,
     shader: sg.Shader,
-    curve_pipeline, handle_pipeline: sg.Pipeline,
-    curve_v_buffer, handle_buffer: sg.Buffer,
+    curve_pipeline, handle_pipeline, triangle_pipeline: sg.Pipeline,
+    curve_v_buffer, handle_buffer, triangle_buffer: sg.Buffer,
     vertices: [SAMPLES_CURVED + 1][2]f32,
     handle_data: [16][2]f32,
     control_points: [4]ControlPoint,
+    triangle_data: [16]Triangle, // TODO: have a look here, setting samples to 16
     dragging_point: Maybe(int),
     can_pick_up: bool,
     num_samples: int,
@@ -41,7 +43,7 @@ main :: proc() {
     default_context = context
 
     sapp.run({
-        window_title = "04 Bezier Curve",
+        window_title = "05 Loop-Blinn",
         width = 800,
         height = 600,
         init_cb = init,
@@ -111,7 +113,7 @@ init :: proc "c" () {
             ptr = &state.vertices,
             size = c.size_t((state.num_samples + 1) * size_of([2]f32))
         },
-        usage = { dynamic_update = true }
+        usage = { dynamic_update = true } // sokol won't let us call update_buffer() without this
     })
 
     state.handle_pipeline = sg.make_pipeline({
@@ -135,6 +137,32 @@ init :: proc "c" () {
         data = {
             ptr = &state.handle_data,
             size = c.size_t(len(state.handle_data) * size_of([2]f32))
+        },
+        usage = { dynamic_update = true }
+    })
+
+    state.triangle_pipeline = sg.make_pipeline({
+        shader = state.shader,
+        primitive_type = .TRIANGLES,
+        layout = {
+            attrs = {
+                ATTR_main_position = { format = .FLOAT2 },
+            }
+        },
+    })
+
+    state.triangle_data = triangulate_bezier(
+        cast([2]f32)(state.control_points[0].pos),
+        cast([2]f32)(state.control_points[1].pos),
+        cast([2]f32)(state.control_points[2].pos),
+        cast([2]f32)(state.control_points[3].pos),
+        TRIANGLE_SAMPLES
+    )
+
+    state.triangle_buffer = sg.make_buffer({
+        data = {
+            ptr = &state.triangle_data,
+            size = c.size_t(len(state.triangle_data) * size_of(Triangle))
         },
         usage = { dynamic_update = true }
     })
@@ -165,6 +193,11 @@ frame :: proc "c" () {
 	sg.apply_bindings({ vertex_buffers = { 0 = state.handle_buffer } })
 	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
 	sg.draw(0, len(state.handle_data), 1)
+
+	sg.apply_pipeline(state.triangle_pipeline)
+	sg.apply_bindings({ vertex_buffers = { 0 = state.triangle_buffer } })
+	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+	sg.draw(0, len(state.triangle_data) * 3, 1)
 
 	sg.end_pass()
     sg.commit()
@@ -208,10 +241,6 @@ event :: proc "c" (e: ^sapp.Event) {
     update_render()
 }
 
-lerp2d :: proc(a, b: [2]f32, t: f32) -> [2]f32 {
-    return (b - a) * t + a
-}
-
 update_render :: proc() {
     state.num_samples = is_flat_enough(
         ([2]f32)(state.control_points[0].pos),
@@ -232,7 +261,6 @@ update_render :: proc() {
         )
     }
 
-    // Note: for update, I still need to provide pointer and size
     sg.update_buffer(state.curve_v_buffer, {
         ptr = &state.vertices,
         size = c.size_t((state.num_samples + 1) * size_of([2]f32))
@@ -248,5 +276,18 @@ update_render :: proc() {
     sg.update_buffer(state.handle_buffer, {
         ptr = &state.handle_data,
         size = c.size_t(len(state.handle_data) * size_of([2]f32))
+    })
+
+    state.triangle_data = triangulate_bezier(
+        cast([2]f32)(state.control_points[0].pos),
+        cast([2]f32)(state.control_points[1].pos),
+        cast([2]f32)(state.control_points[2].pos),
+        cast([2]f32)(state.control_points[3].pos),
+        TRIANGLE_SAMPLES
+    )
+
+    sg.update_buffer(state.triangle_buffer, {
+        ptr = &state.triangle_data,
+        size = c.size_t(len(state.triangle_data) * size_of(Triangle))
     })
 }
