@@ -30,7 +30,7 @@ state: struct {
     vertices: [SAMPLES_CURVED + 1][2]f32,
     handle_data: [16][2]f32,
     control_points: [4]ControlPoint,
-    triangle_data: [16]Triangle, // TODO: have a look here, setting samples to 16
+    triangle_data: [TRIANGLE_SAMPLES]Triangle,
     dragging_point: Maybe(int),
     can_pick_up: bool,
     num_samples: int,
