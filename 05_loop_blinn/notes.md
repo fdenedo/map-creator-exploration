@@ -9,3 +9,5 @@ Options:
 - my own algorithm - I'll probably do this eventually, just to get a feel for the principles behind it, but I'm leaning away from this in favour of the library approach
 
 I think for this project right now, I'll focus on making the code a bit more modular, as there is a lot of code I will want to reuse going forward, and starting with a simple toy project that demonstrated Loop-Blinn working, so I can easily port that and get it working with the more sophisticated spline drawing I want to get involved with in the next project. I'll also want to bring the code that closes "coastlines" from project 2.
+
+This is also my first attempt at implementing a paper.

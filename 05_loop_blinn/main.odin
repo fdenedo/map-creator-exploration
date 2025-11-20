@@ -215,6 +215,7 @@ event :: proc "c" (e: ^sapp.Event) {
     case .MOUSE_SCROLL:
         state.camera.zoom += e.scroll_y * 0.1
         state.camera.zoom = min(20.0, max(state.camera.zoom, 0.5))
+        update_render()
     case .MOUSE_DOWN:
         if e.mouse_button != .LEFT do break
         if !state.can_pick_up do break
@@ -231,14 +232,13 @@ event :: proc "c" (e: ^sapp.Event) {
         mouse := ScreenVec2{ e.mouse_x, e.mouse_y }
         if state.dragging_point != nil {
             state.control_points[state.dragging_point.?].pos = screen_to_world(mouse, true)
+            update_render()
         }
     case .MOUSE_UP:
         if e.mouse_button != .LEFT do break
         state.dragging_point = nil
         state.can_pick_up = true
     }
-
-    update_render()
 }
 
 update_render :: proc() {
