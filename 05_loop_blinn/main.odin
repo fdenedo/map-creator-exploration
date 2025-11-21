@@ -21,22 +21,23 @@ ControlPoint :: struct {
 }
 
 state: struct {
-    aspect_ratio: f32,
-    camera: Camera,
+    editor: EditorState,
+
     pass_action: sg.Pass_Action,
     shader: sg.Shader,
     curve_pipeline, handle_pipeline, triangle_pipeline: sg.Pipeline,
     curve_v_buffer, handle_buffer, triangle_buffer: sg.Buffer,
     vertices: [SAMPLES_CURVED + 1][2]f32,
     handle_data: [16][2]f32,
-    control_points: [4]ControlPoint,
     triangle_data: [TRIANGLE_SAMPLES]Triangle,
-    dragging_point: Maybe(int),
-    can_pick_up: bool,
     num_samples: int,
 }
 
 default_context: runtime.Context
+
+// Begin organisation
+// Need editor - handles state and events
+// render - handles rendering, gets raw data
 
 main :: proc() {
     context.logger = log.create_console_logger()
@@ -64,20 +65,13 @@ init :: proc "c" () {
         logger = sg.Logger(shelpers.logger(&default_context)),
     })
 
-    state.camera = create_camera()
+    editor_init(&state.editor)
 
     state.pass_action = {
         colors = { 0 = { load_action = .CLEAR, clear_value = { 1, 1, 1, 1 } } },
     }
 
     state.shader = sg.make_shader(main_shader_desc(sg.query_backend()))
-
-    state.control_points = {
-        ControlPoint { pos = {-0.75, -0.25} },
-        ControlPoint { pos = {-0.5,   0.25} },
-        ControlPoint { pos = { 0.5,   0.25} },
-        ControlPoint { pos = { 0.75, -0.25} },
-    }
 
     state.curve_pipeline = sg.make_pipeline({
         shader = state.shader,
@@ -90,20 +84,20 @@ init :: proc "c" () {
     })
 
     state.num_samples = is_flat_enough(
-        ([2]f32)(state.control_points[0].pos),
-        ([2]f32)(state.control_points[1].pos),
-        ([2]f32)(state.control_points[2].pos),
-        ([2]f32)(state.control_points[3].pos),
+        ([2]f32)(state.editor.control_points[0].pos),
+        ([2]f32)(state.editor.control_points[1].pos),
+        ([2]f32)(state.editor.control_points[2].pos),
+        ([2]f32)(state.editor.control_points[3].pos),
         0.1
     ) ? SAMPLES_STRAIGHT : SAMPLES_CURVED
 
     t_delta := 1.0 / f32(state.num_samples)
     for i in 0..=state.num_samples {
         state.vertices[i] = evaluate_bezier_cubic(
-            cast([2]f32) state.control_points[0].pos,
-            cast([2]f32) state.control_points[1].pos,
-            cast([2]f32) state.control_points[2].pos,
-            cast([2]f32) state.control_points[3].pos,
+            cast([2]f32) state.editor.control_points[0].pos,
+            cast([2]f32) state.editor.control_points[1].pos,
+            cast([2]f32) state.editor.control_points[2].pos,
+            cast([2]f32) state.editor.control_points[3].pos,
             0 + t_delta * f32(i)
         )
     }
@@ -126,11 +120,11 @@ init :: proc "c" () {
         },
     })
 
-    for point, i in state.control_points {
-        state.handle_data[i*4 + 0] = cast([2]f32)(state.control_points[i].pos + screen_to_world({ 3,  3}, false))
-        state.handle_data[i*4 + 1] = cast([2]f32)(state.control_points[i].pos - screen_to_world({ 3,  3}, false))
-        state.handle_data[i*4 + 2] = cast([2]f32)(state.control_points[i].pos + screen_to_world({-3,  3}, false))
-        state.handle_data[i*4 + 3] = cast([2]f32)(state.control_points[i].pos + screen_to_world({ 3, -3}, false))
+    for point, i in state.editor.control_points {
+        state.handle_data[i*4 + 0] = cast([2]f32)(state.editor.control_points[i].pos + screen_to_world({ 3,  3}, state.editor.camera, false))
+        state.handle_data[i*4 + 1] = cast([2]f32)(state.editor.control_points[i].pos - screen_to_world({ 3,  3}, state.editor.camera, false))
+        state.handle_data[i*4 + 2] = cast([2]f32)(state.editor.control_points[i].pos + screen_to_world({-3,  3}, state.editor.camera, false))
+        state.handle_data[i*4 + 3] = cast([2]f32)(state.editor.control_points[i].pos + screen_to_world({ 3, -3}, state.editor.camera, false))
     }
 
     state.handle_buffer = sg.make_buffer({
@@ -152,10 +146,10 @@ init :: proc "c" () {
     })
 
     state.triangle_data = triangulate_bezier(
-        cast([2]f32)(state.control_points[0].pos),
-        cast([2]f32)(state.control_points[1].pos),
-        cast([2]f32)(state.control_points[2].pos),
-        cast([2]f32)(state.control_points[3].pos),
+        cast([2]f32)(state.editor.control_points[0].pos),
+        cast([2]f32)(state.editor.control_points[1].pos),
+        cast([2]f32)(state.editor.control_points[2].pos),
+        cast([2]f32)(state.editor.control_points[3].pos),
         TRIANGLE_SAMPLES
     )
 
@@ -166,20 +160,18 @@ init :: proc "c" () {
         },
         usage = { dynamic_update = true }
     })
-
-    state.can_pick_up = true
 }
 
 frame :: proc "c" () {
     context = default_context
-    state.camera.aspect_ratio = sapp.widthf() / sapp.heightf() // TODO: Calculated on init now, probably listen to window resize event
+    state.editor.camera.aspect_ratio = sapp.widthf() / sapp.heightf() // TODO: Calculated on init now, probably listen to window resize event
 
     sg.begin_pass({
         action = state.pass_action,
         swapchain = shelpers.glue_swapchain()
     })
 
-    camera_mat := camera_matrix(state.camera)
+    camera_mat := camera_matrix(state.editor.camera)
     uniforms := Vs_Params {
 	    u_camera_matrix = transmute([16]f32)camera_mat,
 	}
@@ -210,53 +202,25 @@ cleanup :: proc "c" () {
 
 event :: proc "c" (e: ^sapp.Event) {
     context = default_context
-
-    #partial switch e.type {
-    case .MOUSE_SCROLL:
-        state.camera.zoom += e.scroll_y * 0.1
-        state.camera.zoom = min(20.0, max(state.camera.zoom, 0.5))
-        update_render()
-    case .MOUSE_DOWN:
-        if e.mouse_button != .LEFT do break
-        if !state.can_pick_up do break
-
-        mouse := ScreenVec2{ e.mouse_x, e.mouse_y }
-        for control_point, index in state.control_points {
-            if linalg.vector_length(world_to_screen(control_point.pos, true) - mouse) < 8 {
-                state.dragging_point = index
-            }
-        }
-
-        state.can_pick_up = false
-    case .MOUSE_MOVE:
-        mouse := ScreenVec2{ e.mouse_x, e.mouse_y }
-        if state.dragging_point != nil {
-            state.control_points[state.dragging_point.?].pos = screen_to_world(mouse, true)
-            update_render()
-        }
-    case .MOUSE_UP:
-        if e.mouse_button != .LEFT do break
-        state.dragging_point = nil
-        state.can_pick_up = true
-    }
+    editor_handle_event(&state.editor, e)
 }
 
 update_render :: proc() {
     state.num_samples = is_flat_enough(
-        ([2]f32)(state.control_points[0].pos),
-        ([2]f32)(state.control_points[1].pos),
-        ([2]f32)(state.control_points[2].pos),
-        ([2]f32)(state.control_points[3].pos),
+        ([2]f32)(state.editor.control_points[0].pos),
+        ([2]f32)(state.editor.control_points[1].pos),
+        ([2]f32)(state.editor.control_points[2].pos),
+        ([2]f32)(state.editor.control_points[3].pos),
         0.1
     ) ? SAMPLES_STRAIGHT : SAMPLES_CURVED
 
     t_delta := 1.0 / f32(state.num_samples)
     for i in 0..=state.num_samples {
         state.vertices[i] = evaluate_bezier_cubic(
-            cast([2]f32) state.control_points[0].pos,
-            cast([2]f32) state.control_points[1].pos,
-            cast([2]f32) state.control_points[2].pos,
-            cast([2]f32) state.control_points[3].pos,
+            cast([2]f32) state.editor.control_points[0].pos,
+            cast([2]f32) state.editor.control_points[1].pos,
+            cast([2]f32) state.editor.control_points[2].pos,
+            cast([2]f32) state.editor.control_points[3].pos,
             0 + t_delta * f32(i)
         )
     }
@@ -266,11 +230,11 @@ update_render :: proc() {
         size = c.size_t((state.num_samples + 1) * size_of([2]f32))
     })
 
-    for point, i in state.control_points {
-        state.handle_data[i*4 + 0] = cast([2]f32)(state.control_points[i].pos + screen_to_world({ 3,  3}, false))
-        state.handle_data[i*4 + 1] = cast([2]f32)(state.control_points[i].pos - screen_to_world({ 3,  3}, false))
-        state.handle_data[i*4 + 2] = cast([2]f32)(state.control_points[i].pos + screen_to_world({-3,  3}, false))
-        state.handle_data[i*4 + 3] = cast([2]f32)(state.control_points[i].pos + screen_to_world({ 3, -3}, false))
+    for point, i in state.editor.control_points {
+        state.handle_data[i*4 + 0] = cast([2]f32)(state.editor.control_points[i].pos + screen_to_world({ 3,  3}, state.editor.camera, false))
+        state.handle_data[i*4 + 1] = cast([2]f32)(state.editor.control_points[i].pos - screen_to_world({ 3,  3}, state.editor.camera, false))
+        state.handle_data[i*4 + 2] = cast([2]f32)(state.editor.control_points[i].pos + screen_to_world({-3,  3}, state.editor.camera, false))
+        state.handle_data[i*4 + 3] = cast([2]f32)(state.editor.control_points[i].pos + screen_to_world({ 3, -3}, state.editor.camera, false))
     }
 
     sg.update_buffer(state.handle_buffer, {
@@ -279,10 +243,10 @@ update_render :: proc() {
     })
 
     state.triangle_data = triangulate_bezier(
-        cast([2]f32)(state.control_points[0].pos),
-        cast([2]f32)(state.control_points[1].pos),
-        cast([2]f32)(state.control_points[2].pos),
-        cast([2]f32)(state.control_points[3].pos),
+        cast([2]f32)(state.editor.control_points[0].pos),
+        cast([2]f32)(state.editor.control_points[1].pos),
+        cast([2]f32)(state.editor.control_points[2].pos),
+        cast([2]f32)(state.editor.control_points[3].pos),
         TRIANGLE_SAMPLES
     )
 

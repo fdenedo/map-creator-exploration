@@ -9,8 +9,10 @@ Triangle :: struct {
 //
 // $samples is evaluated at compile time (fine for the way I'm using it right now)
 // Interesting things to learn here re: memory allocation
+// Need a better name instead of samples, as samples denotes the number of points,
+// not the number of triangles
 triangulate_bezier :: proc(p0, p1, p2, p3: [2]f32, $samples: int) -> [samples]Triangle {
-    assert(samples > 1, "Samples must be greater than 1")
+    assert(samples > 2, "Samples must be greater than 2")
 
     triangles : [samples]Triangle
     evaluated_bezier_points: [samples][2]f32

@@ -47,11 +47,10 @@ ndc_to_screen_pixel :: proc(vec2: [2]f32, translate: bool) -> ScreenVec2 { // Pr
     }
 }
 
-// TODO: pass in camera matrix rather than looking at state
-screen_to_world :: proc(vec2: ScreenVec2, translate: bool) -> WorldVec2 {
+screen_to_world :: proc(vec2: ScreenVec2, camera: Camera, translate: bool) -> WorldVec2 {
     homogenous: f32 = translate ? 1.0 : 0.0
     ndc            := screen_pixel_to_ndc(vec2, translate)
-    cam_matrix     := camera_matrix(state.camera)
+    cam_matrix     := camera_matrix(camera)
     inverse        := linalg.matrix4_inverse(cam_matrix)
 
     ndc_homogeneous     := [4]f32{ndc.x, ndc.y, 0.0, homogenous}
@@ -59,10 +58,9 @@ screen_to_world :: proc(vec2: ScreenVec2, translate: bool) -> WorldVec2 {
     return WorldVec2(world_homogeneous.xy)
 }
 
-// TODO: pass in camera matrix rather than looking at state
-world_to_screen :: proc(vec2: WorldVec2, translate: bool) -> ScreenVec2 {
+world_to_screen :: proc(vec2: WorldVec2, camera: Camera, translate: bool) -> ScreenVec2 {
     homogenous: f32 = translate ? 1.0 : 0.0
-    cam_matrix     := camera_matrix(state.camera)
+    cam_matrix     := camera_matrix(camera)
 
     world_homogenous    := [4]f32{vec2.x, vec2.y, 0.0, homogenous}
     screen_homogenous   := cam_matrix * world_homogenous
