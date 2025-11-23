@@ -45,7 +45,7 @@ render_init :: proc(r: ^RenderState) {
 
     r.triangle_pipeline = sg.make_pipeline({
         shader = r.shader,
-        primitive_type = .TRIANGLES,
+        primitive_type = .LINES,
         layout = {
             attrs = {
                 ATTR_main_position = { format = .FLOAT2 },
@@ -64,7 +64,7 @@ render_init :: proc(r: ^RenderState) {
     })
 
     r.triangle_buffer = sg.make_buffer({
-        size = c.size_t(TRIANGLE_SAMPLES * size_of(Triangle)),
+        size = c.size_t(12 * size_of(Triangle)),
         usage = { dynamic_update = true }
     })
 
@@ -77,7 +77,7 @@ render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
     log.debug("Updating render geometry")
     r.curve_samples = geo.curve_point_count
     r.handle_vert_count = len(geo.handle_lines)
-    r.triangle_count = len(geo.triangle_verts)
+    r.triangle_count = len(geo.triangle_wireframe_lines)
 
     sg.update_buffer(r.curve_buffer, {
         ptr = &geo.curve_points,
@@ -88,8 +88,8 @@ render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
         size = c.size_t(r.handle_vert_count * size_of([2]f32))
     })
     sg.update_buffer(r.triangle_buffer, {
-        ptr = &geo.triangle_verts,
-        size = c.size_t(r.triangle_count * size_of(Triangle))
+        ptr = &geo.triangle_wireframe_lines,
+        size = c.size_t(r.triangle_count * size_of([2]f32))
     })
     log.debug("Renderer geo updated")
 }

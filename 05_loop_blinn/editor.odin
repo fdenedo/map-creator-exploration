@@ -6,12 +6,31 @@ import sapp "shared:sokol/app"
 
 Event :: sapp.Event
 
+CurveType :: enum {
+    QUADRATIC = 0,
+    CUBIC
+}
+
 EditorState :: struct {
     camera: Camera,
     control_points: [4]WorldVec2,
     can_pick_up: bool,
     dragging_point: Maybe(int),
     should_rerender: bool,
+    curve_type: CurveType,
+}
+
+control_points_cubic :: [4]WorldVec2 {
+    { -0.75, -0.25 },
+    { -0.5,   0.25 },
+    {  0.5,   0.25 },
+    {  0.75, -0.25 },
+}
+
+control_points_quad :: [3]WorldVec2 {
+    { -0.75, -0.25 },
+    {  0,     0.25 },
+    {  0.75, -0.25 },
 }
 
 editor_init :: proc(editor_state: ^EditorState) {
@@ -19,15 +38,11 @@ editor_init :: proc(editor_state: ^EditorState) {
 
     log.debug("Initialising editor")
     editor_state.camera = create_camera()
-    editor_state.control_points = {
-        { -0.75, -0.25 },
-        { -0.5,   0.25 },
-        {  0.5,   0.25 },
-        {  0.75, -0.25 },
-    }
+    editor_state.control_points = control_points_cubic
     editor_state.can_pick_up = true
     editor_state.dragging_point = nil
     editor_state.should_rerender = true
+    editor_state.curve_type = .CUBIC
 }
 
 editor_handle_event :: proc(editor_state: ^EditorState, e: ^Event) {

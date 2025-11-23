@@ -4,13 +4,13 @@ import "core:log"
 
 SAMPLES_CURVED   :: 30
 SAMPLES_STRAIGHT ::  5
-TRIANGLE_SAMPLES :: 16
+TRIANGLE_SAMPLES ::  2
 
 CurveGeometry :: struct {
     curve_points: [SAMPLES_CURVED + 1]WorldVec2,
     curve_point_count: int,
 
-    triangle_verts: [TRIANGLE_SAMPLES]Triangle,
+    triangle_wireframe_lines: [12][2]f32,
 
     handle_lines: [16]WorldVec2
 }
@@ -38,13 +38,20 @@ generate_curve_geometry :: proc(control_points: [4]WorldVec2, camera: Camera, ou
         ))
     }
 
-    out.triangle_verts = triangulate_bezier(
+    // For cubics, one line will be duplicated and could be stored once, could just
+    // hard-code this
+    triangulated := triangulate_quad(
         cast([2]f32)(control_points[0]),
         cast([2]f32)(control_points[1]),
         cast([2]f32)(control_points[2]),
         cast([2]f32)(control_points[3]),
-        TRIANGLE_SAMPLES
     )
+    for i in 0..<len(triangulated) {
+        lines := triangle_to_lines(triangulated[i])
+        for j in 0..<6 {
+            out.triangle_wireframe_lines[i*6 + j] = lines[j]
+        }
+    }
 
     // Add this calculation to the shader so we don't have to pass in the camera
     // Matches more closely to what we'll eventually do with the billboard strategy
