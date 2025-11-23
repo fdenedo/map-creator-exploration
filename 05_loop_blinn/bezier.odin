@@ -6,6 +6,13 @@ lerp2d :: proc(a, b: [2]f32, t: f32) -> [2]f32 {
     return (b - a) * t + a
 }
 
+evaluate_bezier_quadratic :: proc(p0, p1, p2: [2]f32, t: f32) -> [2]f32 {
+    a0 := lerp2d(p0, p1, t)
+    a1 := lerp2d(p1, p2, t)
+
+    return lerp2d(a0, a1, t)
+}
+
 evaluate_bezier_cubic :: proc(p0, p1, p2, p3: [2]f32, t: f32) -> [2]f32 {
     a0 := lerp2d(p0, p1, t)
     a1 := lerp2d(p1, p2, t)

@@ -64,7 +64,7 @@ render_init :: proc(r: ^RenderState) {
     })
 
     r.triangle_buffer = sg.make_buffer({
-        size = c.size_t(12 * size_of(Triangle)),
+        size = c.size_t(12 * size_of([2]f32)),
         usage = { dynamic_update = true }
     })
 
@@ -76,8 +76,8 @@ render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
 
     log.debug("Updating render geometry")
     r.curve_samples = geo.curve_point_count
-    r.handle_vert_count = len(geo.handle_lines)
-    r.triangle_count = len(geo.triangle_wireframe_lines)
+    r.handle_vert_count = geo.handle_vert_count
+    r.triangle_count = geo.triangle_vert_count
 
     sg.update_buffer(r.curve_buffer, {
         ptr = &geo.curve_points,
@@ -119,7 +119,7 @@ render_frame :: proc(r: ^RenderState, camera: Camera) {
 	sg.apply_pipeline(r.triangle_pipeline)
 	sg.apply_bindings({ vertex_buffers = { 0 = r.triangle_buffer } })
 	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	sg.draw(0, r.triangle_count * 3, 1)
+	sg.draw(0, r.triangle_count, 1)
 
 	sg.end_pass()
     sg.commit()
