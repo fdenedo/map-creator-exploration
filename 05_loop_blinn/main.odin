@@ -52,6 +52,15 @@ frame :: proc "c" () {
     context = default_context
     if (state.editor.should_rerender) {
         generate_curve_geometry(state.editor.control_points[:], state.editor.camera, &state.geometry)
+
+        // HACK - working with only quad for now
+        points := [3][2]f32{
+            cast([2]f32) state.editor.control_points[0],
+            cast([2]f32) state.editor.control_points[1],
+            cast([2]f32) state.editor.control_points[2],
+        }
+        generate_curve_loop_blinn_quad(points, state.editor.camera, &state.geometry)
+
         render_update_geometry(&state.render, &state.geometry)
         state.editor.should_rerender = false
     }

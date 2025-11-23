@@ -11,6 +11,10 @@ RenderState :: struct {
     curve_pipeline, handle_pipeline, triangle_pipeline: sg.Pipeline,
     curve_buffer, handle_buffer, triangle_buffer: sg.Buffer,
     curve_samples, handle_vert_count, triangle_count: int,
+
+    shader_lb_quad: sg.Shader,
+    pipeline_lb_quad: sg.Pipeline,
+    buffer_lb_quad: sg.Buffer,
 }
 
 render_init :: proc(r: ^RenderState) {
@@ -68,6 +72,25 @@ render_init :: proc(r: ^RenderState) {
         usage = { dynamic_update = true }
     })
 
+    // Shiny new Loop-Blinn Quadratic Shader
+    r.shader_lb_quad = sg.make_shader(quad_loop_blinn_shader_desc(sg.query_backend()))
+
+    r.pipeline_lb_quad = sg.make_pipeline({
+        shader = r.shader_lb_quad,
+        primitive_type = .TRIANGLES,
+        layout = {
+            attrs = {
+                ATTR_quad_loop_blinn_position = { format = .FLOAT2 },
+                ATTR_quad_loop_blinn_uv = { format = .FLOAT2 },
+            }
+        },
+    })
+
+    r.buffer_lb_quad = sg.make_buffer({
+        size = c.size_t(3 * size_of([4]f32)),
+        usage = { dynamic_update = true }
+    })
+
     log.debug("Finished renderer")
 }
 
@@ -91,6 +114,10 @@ render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
         ptr = &geo.triangle_wireframe_lines,
         size = c.size_t(r.triangle_count * size_of([2]f32))
     })
+    sg.update_buffer(r.buffer_lb_quad, {
+        ptr = &geo.control_points_lb_quad,
+        size = c.size_t(3 * size_of([4]f32))
+    })
     log.debug("Renderer geo updated")
 }
 
@@ -106,20 +133,25 @@ render_frame :: proc(r: ^RenderState, camera: Camera) {
 	    u_camera_matrix = transmute([16]f32) camera_matrix(camera),
 	}
 
-    sg.apply_pipeline(r.curve_pipeline)
-    sg.apply_bindings({ vertex_buffers = { 0 = r.curve_buffer } })
-    sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	sg.draw(0, r.curve_samples, 1)
+ //    sg.apply_pipeline(r.curve_pipeline)
+ //    sg.apply_bindings({ vertex_buffers = { 0 = r.curve_buffer } })
+ //    sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+	// sg.draw(0, r.curve_samples, 1)
+
+	// sg.apply_pipeline(r.triangle_pipeline)
+	// sg.apply_bindings({ vertex_buffers = { 0 = r.triangle_buffer } })
+	// sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+	// sg.draw(0, r.triangle_count, 1)
+
+	sg.apply_pipeline(r.pipeline_lb_quad)
+	sg.apply_bindings({ vertex_buffers = { 0 = r.buffer_lb_quad } })
+	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+	sg.draw(0, 3, 1)
 
 	sg.apply_pipeline(r.handle_pipeline)
 	sg.apply_bindings({ vertex_buffers = { 0 = r.handle_buffer } })
 	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
 	sg.draw(0, r.handle_vert_count, 1)
-
-	sg.apply_pipeline(r.triangle_pipeline)
-	sg.apply_bindings({ vertex_buffers = { 0 = r.triangle_buffer } })
-	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	sg.draw(0, r.triangle_count, 1)
 
 	sg.end_pass()
     sg.commit()
