@@ -11,3 +11,5 @@ Options:
 I think for this project right now, I'll focus on making the code a bit more modular, as there is a lot of code I will want to reuse going forward, and starting with a simple toy project that demonstrated Loop-Blinn working, so I can easily port that and get it working with the more sophisticated spline drawing I want to get involved with in the next project. I'll also want to bring the code that closes "coastlines" from project 2.
 
 This is also my first attempt at implementing a paper.
+
+So I added code to allow me to switch between a quadratic curve and a cubic curve, as the quadratic case is much easier to work with. It was almost magical. All I had to do was send a bit more data with each control point, corresponding to texture coordinates. The first gets [0, 0], the second, [0, 0.5] and the third, [1, 1]. It turns out (that Loop and Blinn proved) that for any quadratic parametric curve, evaluating the implicit function u^2 - v = < 0 (where each of those coordiantes above are [u,v]) can be evaluated against each pixel, and correctly coloured depending on what the sign of the result is.

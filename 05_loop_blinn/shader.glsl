@@ -53,12 +53,18 @@ in vec2 v_uv;
 out vec4 color;
 
 void main() {
-    float t = v_uv.y - v_uv.x * v_uv.x;
+    float f = v_uv.x * v_uv.x - v_uv.y;
+    float fw = fwidth(f);
 
-    if (t < 0.0) {
-        color = vec4(1.0, 0.0, 0.0, 1.0);
-    } else {
-        color = vec4(0.0, 1.0, 0.0, 1.0);
+    float distance_in_pixels = f / fw;
+
+    float alpha = clamp(0.5 - distance_in_pixels, 0.0, 1.0);
+
+    if (alpha > 0.0) {
+        color = vec4(1.0, 0.0, 0.0, alpha);
+    }
+    else {
+        discard;
     }
 }
 @end

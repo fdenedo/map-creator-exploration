@@ -78,6 +78,17 @@ render_init :: proc(r: ^RenderState) {
     r.pipeline_lb_quad = sg.make_pipeline({
         shader = r.shader_lb_quad,
         primitive_type = .TRIANGLES,
+        colors = {
+            0 = {
+                blend = {
+                    enabled = true,
+                    src_factor_rgb = .SRC_ALPHA,
+                    dst_factor_rgb = .ONE_MINUS_SRC_ALPHA,
+                    src_factor_alpha = .ONE,
+                    dst_factor_alpha = .ONE_MINUS_SRC_ALPHA,
+                }
+            }
+        },
         layout = {
             attrs = {
                 ATTR_quad_loop_blinn_position = { format = .FLOAT2 },
