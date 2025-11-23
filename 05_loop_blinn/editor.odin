@@ -6,18 +6,12 @@ import sapp "shared:sokol/app"
 
 Event :: sapp.Event
 
-CurveType :: enum {
-    QUADRATIC = 0,
-    CUBIC
-}
-
 EditorState :: struct {
     camera: Camera,
     control_points: []WorldVec2,
     can_pick_up: bool,
     dragging_point: Maybe(int),
     should_rerender: bool,
-    curve_type: CurveType,
 }
 
 control_points_cubic := [4]WorldVec2 {
@@ -38,33 +32,21 @@ editor_init :: proc(editor_state: ^EditorState) {
 
     log.debug("Initialising editor")
     editor_state.camera = create_camera()
-    editor_state.control_points = control_points_cubic[:]
+    editor_state.control_points = control_points_quad[:]
     editor_state.can_pick_up = true
     editor_state.dragging_point = nil
     editor_state.should_rerender = true
-    editor_state.curve_type = .CUBIC
-}
-
-editor_reset_curve :: proc(editor_state: ^EditorState) {
-    switch (editor_state.curve_type) {
-    case .QUADRATIC:
-        editor_state.control_points = control_points_quad[:]
-    case .CUBIC:
-        editor_state.control_points = control_points_cubic[:]
-    }
 }
 
 editor_handle_event :: proc(editor_state: ^EditorState, e: ^Event) {
     #partial switch e.type {
     case .KEY_DOWN:
         if e.key_code == .C {
-            editor_state.curve_type = .CUBIC
-            editor_reset_curve(editor_state)
+            editor_state.control_points = control_points_cubic[:]
             editor_state.should_rerender = true
         }
         if e.key_code == .Q {
-            editor_state.curve_type = .QUADRATIC
-            editor_reset_curve(editor_state)
+            editor_state.control_points = control_points_quad[:]
             editor_state.should_rerender = true
         }
     case .MOUSE_SCROLL:
