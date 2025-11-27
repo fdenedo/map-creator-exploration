@@ -1,6 +1,6 @@
 package main
 
-import "core:log"
+// import "core:log"
 
 SAMPLES_CURVED   :: 30
 SAMPLES_STRAIGHT ::  5
@@ -46,8 +46,6 @@ where len(control_points) == 4 {
 
 generate_curve_geometry :: proc(control_points: []WorldVec2, camera: Camera, out: ^CurveGeometry) {
     context = default_context
-
-    log.debug("Generating curve geometry")
 
     if len(control_points) == 3 {
         samples := SAMPLES_CURVED
@@ -122,6 +120,4 @@ generate_curve_geometry :: proc(control_points: []WorldVec2, camera: Camera, out
         out.handle_lines[i*4 + 3] = WorldVec2(point + screen_to_world({ 3, -3}, camera, false))
     }
     out.handle_vert_count = len(control_points) * 4
-
-    log.debug("Curve geometry rendered")
 }

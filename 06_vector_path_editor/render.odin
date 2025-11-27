@@ -20,7 +20,6 @@ RenderState :: struct {
 render_init :: proc(r: ^RenderState) {
     context = default_context
 
-    log.debug("Initialising renderer")
     r.pass_action = {
         colors = { 0 = { load_action = .CLEAR, clear_value = { 1, 1, 1, 1 } } },
     }
@@ -101,14 +100,11 @@ render_init :: proc(r: ^RenderState) {
         size = c.size_t(3 * size_of([4]f32)),
         usage = { dynamic_update = true }
     })
-
-    log.debug("Finished renderer")
 }
 
 render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
     context = default_context
 
-    log.debug("Updating render geometry")
     r.curve_samples = geo.curve_point_count
     r.handle_vert_count = geo.handle_vert_count
     r.triangle_count = geo.triangle_vert_count
@@ -129,7 +125,6 @@ render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
         ptr = &geo.control_points_lb_quad,
         size = c.size_t(3 * size_of([4]f32))
     })
-    log.debug("Renderer geo updated")
 }
 
 render_frame :: proc(r: ^RenderState, camera: Camera) {
