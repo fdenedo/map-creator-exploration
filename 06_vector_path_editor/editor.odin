@@ -9,7 +9,7 @@ Event :: sapp.Event
 EditorState :: struct {
     mouse: ScreenVec2,
     camera: Camera,
-    control_points: []WorldVec2,
+    control_points: [dynamic]WorldVec2,
     should_rerender: bool,
     input: Input_State, // use set_state() to modify
 }
@@ -30,7 +30,7 @@ PANNING :: struct {
     mouse_last_pos: ScreenVec2
 }
 ADDING_POINT :: struct {
-    position_start: ScreenVec2
+    position_start: WorldVec2
 }
 DRAGGING_POINT :: struct {
     id: int,
@@ -49,25 +49,11 @@ set_state :: proc(es: ^EditorState, new_state: Input_State) {
     es.input = new_state
 }
 
-control_points_cubic := [4]WorldVec2 {
-    { -0.75, -0.25 },
-    { -0.5,   0.25 },
-    {  0.5,   0.25 },
-    {  0.75, -0.25 },
-}
-
-control_points_quad := [3]WorldVec2 {
-    { -0.75, -0.25 },
-    {  0,     0.25 },
-    {  0.75, -0.25 },
-}
-
 editor_init :: proc(editor_state: ^EditorState) {
     context = default_context
 
     log.debug("Initialising editor")
     editor_state.camera = create_camera()
-    editor_state.control_points = control_points_quad[:]
     editor_state.should_rerender = true
     editor_state.input = IDLE {}
 }
@@ -81,12 +67,11 @@ editor_handle_event :: proc(editor_state: ^EditorState, e: ^Event) {
     case PANNING:
         handle_panning(editor_state, &s, e)
     case ADDING_POINT:
-    // TODO: Implement adding points
+        handle_adding_point(editor_state, &s, e)
     case DRAGGING_POINT:
         handle_dragging_point(editor_state, &s, e)
-    case:
-        handle_global_events(editor_state, e)
     }
+    handle_global_events(editor_state, e)
 }
 
 handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
@@ -104,7 +89,8 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
         if hovered, ok := is.point_hovered.?; ok {
             set_state(es, DRAGGING_POINT { hovered, es.mouse })
         } else {
-            set_state(es, PANNING { es.camera.pos, es.mouse })
+            // set_state(es, PANNING { es.camera.pos, es.mouse })
+            set_state(es, ADDING_POINT { screen_to_world(es.mouse, es.camera, true) })
         }
     }
 }
@@ -117,6 +103,21 @@ handle_panning :: proc(es: ^EditorState, is: ^PANNING, e: ^Event) {
         is.mouse_last_pos = es.mouse
     case .MOUSE_UP:
         es.input = IDLE {} // TODO: point_hovered is initialised to 0 here
+    }
+}
+
+handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
+    #partial switch e.type {
+    case .MOUSE_MOVE:
+        // TODO: move the handles for the added point
+    case .MOUSE_UP:
+        append(&es.control_points, is.position_start)
+        es.should_rerender = true
+        set_state(es, IDLE {})
+    case .KEY_DOWN:
+        if e.key_code == .ESCAPE {
+            set_state(es, IDLE {})
+        }
     }
 }
 

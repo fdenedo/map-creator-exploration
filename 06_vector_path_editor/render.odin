@@ -1,7 +1,7 @@
 package main
 
 import "core:c"
-import "core:log"
+// import "core:log"
 import sg "shared:sokol/gfx"
 import shelpers "shared:sokol/helpers"
 
@@ -62,7 +62,7 @@ render_init :: proc(r: ^RenderState) {
     })
 
     r.handle_buffer = sg.make_buffer({
-        size = c.size_t(16 * size_of([2]f32)),
+        size = c.size_t(200 * size_of([2]f32)), // Start with a limit of 200 / 4 = 50 points
         usage = { dynamic_update = true }
     })
 
@@ -109,22 +109,22 @@ render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
     r.handle_vert_count = geo.handle_vert_count
     r.triangle_count = geo.triangle_vert_count
 
-    sg.update_buffer(r.curve_buffer, {
-        ptr = &geo.curve_points,
-        size = c.size_t(r.curve_samples * size_of(WorldVec2))
-    })
+    // sg.update_buffer(r.curve_buffer, {
+    //     ptr = &geo.curve_points,
+    //     size = c.size_t(r.curve_samples * size_of(WorldVec2))
+    // })
     sg.update_buffer(r.handle_buffer, {
-        ptr = &geo.handle_lines,
+        ptr = raw_data(geo.handle_lines),
         size = c.size_t(r.handle_vert_count * size_of([2]f32))
     })
-    sg.update_buffer(r.triangle_buffer, {
-        ptr = &geo.triangle_wireframe_lines,
-        size = c.size_t(r.triangle_count * size_of([2]f32))
-    })
-    sg.update_buffer(r.buffer_lb_quad, {
-        ptr = &geo.control_points_lb_quad,
-        size = c.size_t(3 * size_of([4]f32))
-    })
+    // sg.update_buffer(r.triangle_buffer, {
+    //     ptr = &geo.triangle_wireframe_lines,
+    //     size = c.size_t(r.triangle_count * size_of([2]f32))
+    // })
+    // sg.update_buffer(r.buffer_lb_quad, {
+    //     ptr = &geo.control_points_lb_quad,
+    //     size = c.size_t(3 * size_of([4]f32))
+    // })
 }
 
 render_frame :: proc(r: ^RenderState, camera: Camera) {
@@ -139,9 +139,9 @@ render_frame :: proc(r: ^RenderState, camera: Camera) {
 	    u_camera_matrix = transmute([16]f32) camera_matrix(camera),
 	}
 
- //    sg.apply_pipeline(r.curve_pipeline)
- //    sg.apply_bindings({ vertex_buffers = { 0 = r.curve_buffer } })
- //    sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+    // sg.apply_pipeline(r.curve_pipeline)
+    // sg.apply_bindings({ vertex_buffers = { 0 = r.curve_buffer } })
+    // sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
 	// sg.draw(0, r.curve_samples, 1)
 
 	// sg.apply_pipeline(r.triangle_pipeline)
@@ -149,10 +149,10 @@ render_frame :: proc(r: ^RenderState, camera: Camera) {
 	// sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
 	// sg.draw(0, r.triangle_count, 1)
 
-	sg.apply_pipeline(r.pipeline_lb_quad)
-	sg.apply_bindings({ vertex_buffers = { 0 = r.buffer_lb_quad } })
-	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	sg.draw(0, 3, 1)
+	// sg.apply_pipeline(r.pipeline_lb_quad)
+	// sg.apply_bindings({ vertex_buffers = { 0 = r.buffer_lb_quad } })
+	// sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+	// sg.draw(0, 3, 1)
 
 	sg.apply_pipeline(r.handle_pipeline)
 	sg.apply_bindings({ vertex_buffers = { 0 = r.handle_buffer } })
