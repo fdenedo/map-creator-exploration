@@ -113,12 +113,11 @@ void main() {
 
     float alpha = clamp(0.5 - distance_in_pixels, 0.0, 1.0);
 
-    if (alpha > 0.0) {
-        color = vec4(1.0, 0.0, 0.0, alpha);
-    }
-    else {
+    if (alpha <= 0.0) {
         discard;
     }
+
+    color = vec4(1.0, 0.0, 0.0, alpha);
 }
 @end
 
