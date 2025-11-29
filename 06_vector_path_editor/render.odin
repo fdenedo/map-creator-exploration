@@ -2,15 +2,16 @@ package main
 
 import "core:c"
 // import "core:log"
+import sapp "shared:sokol/app"
 import sg "shared:sokol/gfx"
 import shelpers "shared:sokol/helpers"
 
 RenderState :: struct {
     pass_action: sg.Pass_Action,
-    shader: sg.Shader,
-    curve_pipeline, handle_pipeline, triangle_pipeline: sg.Pipeline,
-    curve_buffer, handle_buffer, triangle_buffer: sg.Buffer,
-    curve_samples, handle_vert_count, triangle_count: int,
+    shader_handle: sg.Shader,
+    curve_pipeline, pipeline_handle, triangle_pipeline: sg.Pipeline,
+    curve_buffer, buffer_handle, ibuffer_handle, triangle_buffer: sg.Buffer,
+    curve_samples, control_points, triangle_count: int,
 
     shader_lb_quad: sg.Shader,
     pipeline_lb_quad: sg.Pipeline,
@@ -24,59 +25,11 @@ render_init :: proc(r: ^RenderState) {
         colors = { 0 = { load_action = .CLEAR, clear_value = { 1, 1, 1, 1 } } },
     }
 
-    r.shader = sg.make_shader(main_shader_desc(sg.query_backend()))
+    r.shader_handle = sg.make_shader(handle_shader_desc(sg.query_backend()))
 
-    r.curve_pipeline = sg.make_pipeline({
-        shader = r.shader,
-        primitive_type = .LINE_STRIP,
-        layout = {
-            attrs = {
-                ATTR_main_position = { format = .FLOAT2 }
-            }
-        },
-    })
-
-    r.handle_pipeline = sg.make_pipeline({
-        shader = r.shader,
-        primitive_type = .LINES,
-        layout = {
-            attrs = {
-                ATTR_main_position = { format = .FLOAT2 },
-            }
-        },
-    })
-
-    r.triangle_pipeline = sg.make_pipeline({
-        shader = r.shader,
-        primitive_type = .LINES,
-        layout = {
-            attrs = {
-                ATTR_main_position = { format = .FLOAT2 },
-            }
-        },
-    })
-
-    r.curve_buffer = sg.make_buffer({
-        size = c.size_t((SAMPLES_CURVED + 1) * size_of(WorldVec2)),
-        usage = { dynamic_update = true }
-    })
-
-    r.handle_buffer = sg.make_buffer({
-        size = c.size_t(200 * size_of([2]f32)), // Start with a limit of 200 / 4 = 50 points
-        usage = { dynamic_update = true }
-    })
-
-    r.triangle_buffer = sg.make_buffer({
-        size = c.size_t(12 * size_of([2]f32)),
-        usage = { dynamic_update = true }
-    })
-
-    // Shiny new Loop-Blinn Quadratic Shader
-    r.shader_lb_quad = sg.make_shader(quad_loop_blinn_shader_desc(sg.query_backend()))
-
-    r.pipeline_lb_quad = sg.make_pipeline({
-        shader = r.shader_lb_quad,
-        primitive_type = .TRIANGLES,
+    r.pipeline_handle = sg.make_pipeline({
+        shader = r.shader_handle,
+        primitive_type = .TRIANGLE_STRIP,
         colors = {
             0 = {
                 blend = {
@@ -90,14 +43,33 @@ render_init :: proc(r: ^RenderState) {
         },
         layout = {
             attrs = {
-                ATTR_quad_loop_blinn_position = { format = .FLOAT2 },
-                ATTR_quad_loop_blinn_uv = { format = .FLOAT2 },
+                ATTR_handle_position = { format = .FLOAT2, buffer_index = 0, offset = 0 },
+                ATTR_handle_uv = { format = .FLOAT2, buffer_index = 0, offset = 8 },
+                ATTR_handle_instance_pos = { format = .FLOAT2, buffer_index = 1 },
+            },
+            buffers = {
+                0 = { stride = 16 },
+                1 = { step_func = .PER_INSTANCE },
             }
         },
     })
 
-    r.buffer_lb_quad = sg.make_buffer({
-        size = c.size_t(3 * size_of([4]f32)),
+    // Quad vertices for billboards with UVs (position.xy, uv.xy)
+    // UVs go from -1 to 1, centered at origin for easy SDF calculations
+    // As they're exactly the same here, it might make sense to
+    vertices := [?]f32 {
+        -1.0, -1.0,  -1.0, -1.0,
+         1.0, -1.0,   1.0, -1.0,
+        -1.0,  1.0,  -1.0,  1.0,
+         1.0,  1.0,   1.0,  1.0,
+    }
+
+    r.buffer_handle = sg.make_buffer({
+        data = { ptr = &vertices, size = size_of(vertices) }
+    })
+
+    r.ibuffer_handle = sg.make_buffer({
+        size = c.size_t(1024 * size_of(WorldVec2)),
         usage = { dynamic_update = true }
     })
 }
@@ -105,26 +77,12 @@ render_init :: proc(r: ^RenderState) {
 render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
     context = default_context
 
-    r.curve_samples = geo.curve_point_count
-    r.handle_vert_count = geo.handle_vert_count
-    r.triangle_count = geo.triangle_vert_count
+    r.control_points = len(geo.control_points_handle_temp)
 
-    // sg.update_buffer(r.curve_buffer, {
-    //     ptr = &geo.curve_points,
-    //     size = c.size_t(r.curve_samples * size_of(WorldVec2))
-    // })
-    sg.update_buffer(r.handle_buffer, {
-        ptr = raw_data(geo.handle_lines),
-        size = c.size_t(r.handle_vert_count * size_of([2]f32))
+    sg.update_buffer(r.ibuffer_handle, {
+        ptr = raw_data(geo.control_points_handle_temp),
+        size = c.size_t(r.control_points * size_of(WorldVec2))
     })
-    // sg.update_buffer(r.triangle_buffer, {
-    //     ptr = &geo.triangle_wireframe_lines,
-    //     size = c.size_t(r.triangle_count * size_of([2]f32))
-    // })
-    // sg.update_buffer(r.buffer_lb_quad, {
-    //     ptr = &geo.control_points_lb_quad,
-    //     size = c.size_t(3 * size_of([4]f32))
-    // })
 }
 
 render_frame :: proc(r: ^RenderState, camera: Camera) {
@@ -137,27 +95,13 @@ render_frame :: proc(r: ^RenderState, camera: Camera) {
 
     uniforms := Vs_Params {
 	    u_camera_matrix = transmute([16]f32) camera_matrix(camera),
+	    u_viewport_size = { sapp.widthf(), sapp.heightf() }, // Dunno if I should think about app layers, maybe shouldn't import sapp in here?
 	}
 
-    // sg.apply_pipeline(r.curve_pipeline)
-    // sg.apply_bindings({ vertex_buffers = { 0 = r.curve_buffer } })
-    // sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	// sg.draw(0, r.curve_samples, 1)
-
-	// sg.apply_pipeline(r.triangle_pipeline)
-	// sg.apply_bindings({ vertex_buffers = { 0 = r.triangle_buffer } })
-	// sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	// sg.draw(0, r.triangle_count, 1)
-
-	// sg.apply_pipeline(r.pipeline_lb_quad)
-	// sg.apply_bindings({ vertex_buffers = { 0 = r.buffer_lb_quad } })
-	// sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	// sg.draw(0, 3, 1)
-
-	sg.apply_pipeline(r.handle_pipeline)
-	sg.apply_bindings({ vertex_buffers = { 0 = r.handle_buffer } })
+	sg.apply_pipeline(r.pipeline_handle)
+	sg.apply_bindings({ vertex_buffers = { 0 = r.buffer_handle, 1 = r.ibuffer_handle } })
 	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	sg.draw(0, r.handle_vert_count, 1)
+	sg.draw(0, 4, r.control_points)
 
 	sg.end_pass()
     sg.commit()
