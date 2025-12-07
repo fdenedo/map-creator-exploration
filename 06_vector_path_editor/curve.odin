@@ -6,6 +6,23 @@ SAMPLES_CURVED   :: 30
 SAMPLES_STRAIGHT ::  5
 TRIANGLE_SAMPLES ::  2
 
+Point :: struct {
+    id:         int,
+    handle_in:  WorldVec2,
+    pos:        WorldVec2,
+    handle_out: WorldVec2,
+}
+
+Line :: struct {
+    id: int,
+    start, end: Point
+}
+
+Polygon :: struct {
+    lines: [dynamic]Line,
+    closed: bool,
+}
+
 ControlPoint_Quad :: struct {
     pos: [2]f32,
     tex: [2]f32,
@@ -44,7 +61,7 @@ where len(control_points) == 4 {
     // TODO: Not implemented yet
 }
 
-generate_curve_geometry :: proc(control_points: []WorldVec2, camera: Camera, out: ^CurveGeometry) {
+generate_curve_geometry :: proc(control_points: []Point, camera: Camera, out: ^CurveGeometry) {
     context = default_context
 
     // For a naive go at the billboard strategy, for each point I can draw a pair of (instanced) triangles
@@ -53,6 +70,6 @@ generate_curve_geometry :: proc(control_points: []WorldVec2, camera: Camera, out
     // Means I'll pass the control points into the handle buffer, and not generate new geometry
     clear(&out.control_points_handle_temp)
     for point in control_points {
-        append(&out.control_points_handle_temp, point)
+        append(&out.control_points_handle_temp, point.pos)
     }
 }

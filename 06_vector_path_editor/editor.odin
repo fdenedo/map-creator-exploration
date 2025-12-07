@@ -9,7 +9,7 @@ Event :: sapp.Event
 EditorState :: struct {
     mouse: ScreenVec2,
     camera: Camera,
-    control_points: [dynamic]WorldVec2,
+    control_points: [dynamic]Point,
     should_rerender: bool,
     input: Input_State, // use set_state() to modify
 }
@@ -79,7 +79,7 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
     case .MOUSE_MOVE:
         is.point_hovered = nil // No point hovered
         for control_point, index in es.control_points {
-            if linalg.vector_length(world_to_screen(control_point, es.camera, true) - es.mouse) < 8 {
+            if linalg.vector_length(world_to_screen(control_point.pos, es.camera, true) - es.mouse) < 8 {
                 is.point_hovered = index
                 break
             }
@@ -111,7 +111,7 @@ handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
     case .MOUSE_MOVE:
         // TODO: move the handles for the added point
     case .MOUSE_UP:
-        append(&es.control_points, is.position_start)
+        append(&es.control_points, Point{ pos = is.position_start })
         es.should_rerender = true
         set_state(es, IDLE {})
     case .KEY_DOWN:
@@ -124,7 +124,7 @@ handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
 handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) {
     #partial switch e.type {
     case .MOUSE_MOVE:
-        es.control_points[is.id] = screen_to_world(es.mouse, es.camera, true)
+        es.control_points[is.id].pos = screen_to_world(es.mouse, es.camera, true)
         es.should_rerender = true
     case .MOUSE_UP:
         es.input = IDLE {} // TODO: point_hovered is initialised to 0 here
