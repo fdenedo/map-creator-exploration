@@ -39,7 +39,10 @@ CurveGeometry :: struct {
     handle_vert_count: int,
 
     control_points_lb_quad: [4]ControlPoint_Quad,
-    control_points_handle_temp: [dynamic]WorldVec2,
+    control_points_handle_temp: [dynamic]Point,
+
+    anchor_points: [dynamic]WorldVec2,
+    handle_points: [dynamic]WorldVec2,
 }
 
 generate_curve_loop_blinn_quad :: proc(control_points: [3][2]f32, camera: Camera, out:^CurveGeometry) {
@@ -61,15 +64,19 @@ where len(control_points) == 4 {
     // TODO: Not implemented yet
 }
 
-generate_curve_geometry :: proc(control_points: []Point, camera: Camera, out: ^CurveGeometry) {
+generate_handles :: proc(control_points: []Point, camera: Camera, out: ^CurveGeometry) {
     context = default_context
 
     // For a naive go at the billboard strategy, for each point I can draw a pair of (instanced) triangles
     // and then I can use shader arithmetic to draw whatever shape I want the points to be in the fragment
     // shader
     // Means I'll pass the control points into the handle buffer, and not generate new geometry
-    clear(&out.control_points_handle_temp)
+    clear(&out.anchor_points)
+    clear(&out.handle_points)
+
     for point in control_points {
-        append(&out.control_points_handle_temp, point.pos)
+        append(&out.anchor_points, point.pos)
+        append(&out.handle_points, point.handle_in)
+        append(&out.handle_points, point.handle_out)
     }
 }

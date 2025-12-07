@@ -51,7 +51,7 @@ init :: proc "c" () {
 frame :: proc "c" () {
     context = default_context
     if (state.editor.should_rerender) {
-        generate_curve_geometry(state.editor.control_points[:], state.editor.camera, &state.geometry)
+        generate_handles(state.editor.control_points[:], state.editor.camera, &state.geometry)
         render_update_geometry(&state.render, &state.geometry)
         state.editor.should_rerender = false
     }

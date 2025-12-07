@@ -11,6 +11,7 @@
 layout(binding=0) uniform vs_params {
     mat4 u_camera_matrix;
     vec2 u_viewport_size;
+    float u_point_size;
 };
 
 in vec2 position;
@@ -23,14 +24,13 @@ void main() {
     // Transform control point centre to clip space
     vec4 centre_clip = u_camera_matrix * vec4(instance_pos, 0.0, 1.0);
 
-    // Billboard width/height divided by 2
+    // Billboard width/height is u_point_size * 2
     // Can think of this as the radius of the largest circle that can
     // fully fit on the quad
-    float billboard_pixels = 6.0;
 
     // Convert pixel size to NDC space (-1 to 1), 2.0 units covers the entire viewport
     vec2 pixel_to_ndc = 2.0 / u_viewport_size;
-    vec2 ndc_offset = position * billboard_pixels * pixel_to_ndc;
+    vec2 ndc_offset = position * u_point_size * pixel_to_ndc;
 
     // Offset the clip position by the billboard quad vertex
     gl_Position = vec4(centre_clip.xy + ndc_offset, 0.0, 1.0);
@@ -49,6 +49,7 @@ void main() {
 layout(binding=0) uniform vs_params {
     mat4 u_camera_matrix;
     vec2 u_viewport_size;
+    float u_point_size;
 };
 
 in vec2 position;

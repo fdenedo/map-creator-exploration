@@ -10,8 +10,11 @@ RenderState :: struct {
     pass_action: sg.Pass_Action,
     shader_handle: sg.Shader,
     curve_pipeline, pipeline_handle, triangle_pipeline: sg.Pipeline,
-    curve_buffer, buffer_handle, ibuffer_handle, triangle_buffer: sg.Buffer,
+    curve_buffer, buffer_handle, triangle_buffer: sg.Buffer,
     curve_samples, control_points, triangle_count: int,
+
+    ibuffer_handle, ibuffer_anchor: sg.Buffer,
+    handle_count, anchor_count: int,
 
     shader_lb_quad: sg.Shader,
     pipeline_lb_quad: sg.Pipeline,
@@ -72,16 +75,27 @@ render_init :: proc(r: ^RenderState) {
         size = c.size_t(1024 * size_of(WorldVec2)),
         usage = { dynamic_update = true }
     })
+
+    r.ibuffer_anchor = sg.make_buffer({
+        size = c.size_t(1024 * 2 * size_of(WorldVec2)),
+        usage = { dynamic_update = true }
+    })
 }
 
 render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
     context = default_context
 
-    r.control_points = len(geo.control_points_handle_temp)
+    r.anchor_count = len(geo.anchor_points)
+    r.handle_count = len(geo.handle_points)
 
     sg.update_buffer(r.ibuffer_handle, {
-        ptr = raw_data(geo.control_points_handle_temp),
-        size = c.size_t(r.control_points * size_of(WorldVec2))
+        ptr = raw_data(geo.handle_points),
+        size = c.size_t(r.handle_count * size_of(WorldVec2))
+    })
+
+    sg.update_buffer(r.ibuffer_anchor, {
+        ptr = raw_data(geo.anchor_points),
+        size = c.size_t(r.anchor_count * size_of(WorldVec2))
     })
 }
 
@@ -95,13 +109,19 @@ render_frame :: proc(r: ^RenderState, camera: Camera) {
 
     uniforms := Vs_Params {
 	    u_camera_matrix = transmute([16]f32) camera_matrix(camera),
-	    u_viewport_size = { sapp.widthf(), sapp.heightf() }, // Dunno if I should think about app layers, maybe shouldn't import sapp in here?
+	    u_viewport_size = { sapp.widthf(), sapp.heightf() },
 	}
 
 	sg.apply_pipeline(r.pipeline_handle)
 	sg.apply_bindings({ vertex_buffers = { 0 = r.buffer_handle, 1 = r.ibuffer_handle } })
+	uniforms.u_point_size = 3.0
 	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
-	sg.draw(0, 4, r.control_points)
+	sg.draw(0, 4, r.handle_count)
+
+	sg.apply_bindings({ vertex_buffers = { 0 = r.buffer_handle, 1 = r.ibuffer_anchor } })
+	uniforms.u_point_size = 6.0
+	sg.apply_uniforms(UB_vs_params, { ptr = &uniforms, size = size_of(uniforms) })
+	sg.draw(0, 4, r.anchor_count)
 
 	sg.end_pass()
     sg.commit()

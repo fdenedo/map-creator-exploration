@@ -30,11 +30,13 @@ PANNING :: struct {
     mouse_last_pos: ScreenVec2
 }
 ADDING_POINT :: struct {
-    position_start: WorldVec2
+    handle_in: WorldVec2,
+    position_start: WorldVec2,
+    handle_out: WorldVec2,
 }
 DRAGGING_POINT :: struct {
     id: int,
-    position_start: ScreenVec2,
+    position_last: ScreenVec2,
 }
 
 Input_State :: union {
@@ -90,7 +92,12 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
             set_state(es, DRAGGING_POINT { hovered, es.mouse })
         } else {
             // set_state(es, PANNING { es.camera.pos, es.mouse })
-            set_state(es, ADDING_POINT { screen_to_world(es.mouse, es.camera, true) })
+            pos := screen_to_world(es.mouse, es.camera, true)
+            set_state(es, ADDING_POINT {
+                handle_in      = pos,
+                position_start = pos,
+                handle_out     = pos,
+            })
         }
     }
 }
@@ -109,9 +116,16 @@ handle_panning :: proc(es: ^EditorState, is: ^PANNING, e: ^Event) {
 handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
     #partial switch e.type {
     case .MOUSE_MOVE:
-        // TODO: move the handles for the added point
+        pos_out        := screen_to_world(es.mouse, es.camera, true)
+        is.handle_out   = pos_out
+        is.handle_in    = 2 * is.position_start - pos_out // same as pos_start + (pos_start - pos_out)
     case .MOUSE_UP:
-        append(&es.control_points, Point{ pos = is.position_start })
+        // TODO: not using id for now, but need to soon
+        append(&es.control_points, Point{
+            handle_in  = is.handle_in,
+            pos        = is.position_start,
+            handle_out = is.handle_out,
+        })
         es.should_rerender = true
         set_state(es, IDLE {})
     case .KEY_DOWN:
@@ -124,7 +138,11 @@ handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
 handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) {
     #partial switch e.type {
     case .MOUSE_MOVE:
-        es.control_points[is.id].pos = screen_to_world(es.mouse, es.camera, true)
+        mouse_world_delta := screen_to_world(is.position_last - es.mouse, es.camera, false)
+        es.control_points[is.id].handle_in  -= mouse_world_delta
+        es.control_points[is.id].pos        -= mouse_world_delta
+        es.control_points[is.id].handle_out -= mouse_world_delta
+        is.position_last = es.mouse
         es.should_rerender = true
     case .MOUSE_UP:
         es.input = IDLE {} // TODO: point_hovered is initialised to 0 here
