@@ -67,6 +67,16 @@ where len(control_points) == 4 {
 generate_handles :: proc(control_points: []Point, camera: Camera, out: ^CurveGeometry) {
     context = default_context
 
+    clear(&out.handle_lines)
+    for point in control_points {
+        // handle_in to anchor
+        append(&out.handle_lines, point.handle_in)
+        append(&out.handle_lines, point.pos)
+        // anchor to handle_out
+        append(&out.handle_lines, point.pos)
+        append(&out.handle_lines, point.handle_out)
+    }
+
     // For a naive go at the billboard strategy, for each point I can draw a pair of (instanced) triangles
     // and then I can use shader arithmetic to draw whatever shape I want the points to be in the fragment
     // shader

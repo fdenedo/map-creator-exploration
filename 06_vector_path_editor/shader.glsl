@@ -124,3 +124,41 @@ void main() {
 
 @program handle vs_handle fs_handle
 @program quad_loop_blinn vs_quad_loop_blinn fs_quad_loop_blinn
+
+/*
+========================================================================
+    SIMPLE PASSTHROUGH VERTEX SHADER
+    For rendering lines, wireframes, debug geometry, etc.
+========================================================================
+*/
+@vs vs_simple
+
+layout(binding=0) uniform vs_params {
+    mat4 u_camera_matrix;
+    vec2 u_viewport_size;
+    float u_point_size;
+};
+
+in vec2 position;
+
+void main() {
+    vec4 transformed = u_camera_matrix * vec4(position, 0.0, 1.0);
+    gl_Position = vec4(transformed.xy, 0.0, 1.0);
+}
+@end
+
+/*
+========================================================================
+    SIMPLE SOLID COLOR FRAGMENT SHADER
+========================================================================
+*/
+@fs fs_simple
+
+out vec4 color;
+
+void main() {
+    color = vec4(0.5, 0.5, 0.5, 1.0);  // Gray color for handle lines
+}
+@end
+
+@program simple vs_simple fs_simple
