@@ -48,7 +48,7 @@ render_init :: proc(r: ^RenderState) {
                 ATTR_handle_instance_pos = { format = .FLOAT2, buffer_index = 1 },
             },
             buffers = {
-                0 = { stride = 16 },
+                // 0 = { stride = 16 }, Don't need as no gaps
                 1 = { step_func = .PER_INSTANCE },
             }
         },
