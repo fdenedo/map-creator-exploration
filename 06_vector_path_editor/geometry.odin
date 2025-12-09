@@ -48,10 +48,33 @@ generate_path_geometry :: proc(control_points: []Point, out: ^PathGeometry) {
         p2 := ([2]f32)(point.handle_in)
         p3 := ([2]f32)(point.pos)
 
-        for s in 0..<line_segments {
-            first  := len(out.curve_lines) > 0 ? out.curve_lines[len(out.curve_lines)-1] : WorldVec2(p0)
-            second := WorldVec2(evaluate_bezier_cubic(p0, p1, p2, p3, t_delta * f32(s + 1)))
-            append(&out.curve_lines, first, second)
+        // Adaptive sampling
+        // Use a stack to hold samples to be evaluated
+        curve_samples: [dynamic][4][2]f32
+        append(&curve_samples, [4][2]f32{ p0, p1, p2, p3 })
+
+        for {
+            if len(curve_samples) < 1 do break
+
+            segment_control_points := pop(&curve_samples)
+            if is_flat_enough(
+                segment_control_points[0],
+                segment_control_points[1],
+                segment_control_points[2],
+                segment_control_points[3],
+                0.001
+            ) {
+                append(&out.curve_lines, WorldVec2(segment_control_points[0]), WorldVec2(segment_control_points[3]))
+            } else {
+                left, right := split_bezier_cubic(
+                    segment_control_points[0],
+                    segment_control_points[1],
+                    segment_control_points[2],
+                    segment_control_points[3]
+                )
+                // Add segments to the stack from right to left
+                append(&curve_samples, right, left)
+            }
         }
     }
 }
