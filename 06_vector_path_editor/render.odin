@@ -164,6 +164,7 @@ RenderState :: struct {
     shader_point: sg.Shader,
     shader_line: sg.Shader,
 
+    curve_lines: LineRenderer,
     handle_lines: LineRenderer,
     handles: PointRenderer,
     anchors: PointRenderer,
@@ -179,6 +180,7 @@ render_init :: proc(r: ^RenderState) {
     r.shader_point = sg.make_shader(handle_shader_desc(sg.query_backend()))
     r.shader_line = sg.make_shader(line_shader_desc(sg.query_backend()))
 
+    line_renderer_init(&r.curve_lines, r.shader_line)
     line_renderer_init(&r.handle_lines, r.shader_line)
     point_renderer_init(&r.handles, r.shader_point)
     point_renderer_init(&r.anchors, r.shader_point)
@@ -187,10 +189,10 @@ render_init :: proc(r: ^RenderState) {
 render_update_geometry :: proc(r: ^RenderState, handle_geo: ^HandleGeometry, path_geo: ^PathGeometry) {
     context = default_context
 
+    line_renderer_update(&r.curve_lines, path_geo.curve_lines[:][:])
     line_renderer_update(&r.handle_lines, handle_geo.lines[:])
     point_renderer_update(&r.handles, handle_geo.handle_points[:])
     point_renderer_update(&r.anchors, handle_geo.anchor_points[:])
-    // TODO: update path renderer with path_geo.curve_lines
 }
 
 render_frame :: proc(r: ^RenderState, camera: Camera) {
@@ -206,6 +208,7 @@ render_frame :: proc(r: ^RenderState, camera: Camera) {
         u_viewport_size = { sapp.widthf(), sapp.heightf() },
     }
 
+    line_renderer_draw(&r.curve_lines, &uniforms, 1.0)
     line_renderer_draw(&r.handle_lines, &uniforms, 1.0)
     point_renderer_draw(&r.handles, &uniforms, 3.0)
     point_renderer_draw(&r.anchors, &uniforms, 6.0)
