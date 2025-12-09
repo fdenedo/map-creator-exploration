@@ -13,7 +13,8 @@ Matrix4     :: matrix[4, 4]f32
 state: struct {
     editor: EditorState,
     render: RenderState,
-    geometry: CurveGeometry,
+    handle_geo: HandleGeometry,
+    path_geo: PathGeometry,
 }
 
 default_context: runtime.Context
@@ -51,8 +52,9 @@ init :: proc "c" () {
 frame :: proc "c" () {
     context = default_context
     if (state.editor.should_rerender) {
-        generate_handles(state.editor.control_points[:], state.editor.camera, &state.geometry)
-        render_update_geometry(&state.render, &state.geometry)
+        generate_handle_geometry(state.editor.control_points[:], &state.handle_geo)
+        generate_path_geometry(state.editor.control_points[:], &state.path_geo)
+        render_update_geometry(&state.render, &state.handle_geo, &state.path_geo)
         state.editor.should_rerender = false
     }
     render_frame(&state.render, state.editor.camera)

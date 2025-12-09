@@ -184,12 +184,13 @@ render_init :: proc(r: ^RenderState) {
     point_renderer_init(&r.anchors, r.shader_point)
 }
 
-render_update_geometry :: proc(r: ^RenderState, geo: ^CurveGeometry) {
+render_update_geometry :: proc(r: ^RenderState, handle_geo: ^HandleGeometry, path_geo: ^PathGeometry) {
     context = default_context
 
-    line_renderer_update(&r.handle_lines, geo.handle_lines[:])
-    point_renderer_update(&r.handles, geo.handle_points[:])
-    point_renderer_update(&r.anchors, geo.anchor_points[:])
+    line_renderer_update(&r.handle_lines, handle_geo.lines[:])
+    point_renderer_update(&r.handles, handle_geo.handle_points[:])
+    point_renderer_update(&r.anchors, handle_geo.anchor_points[:])
+    // TODO: update path renderer with path_geo.curve_lines
 }
 
 render_frame :: proc(r: ^RenderState, camera: Camera) {
