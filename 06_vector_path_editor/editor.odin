@@ -22,12 +22,19 @@ EditorState :: struct {
 //                    of control points (probably along with handles)
 // DRAGGING_POINT   - changes the position of a pre-existing point
 
+Point_Part :: enum {
+    IN,
+    ANCHOR,
+    OUT
+}
+
 IDLE :: struct {
-    point_hovered: Maybe(int)
+    point_hovered: Maybe(int),
+    part: Point_Part,
 }
 PANNING :: struct {
     camera_start: WorldVec2,
-    mouse_last_pos: ScreenVec2
+    mouse_last_pos: ScreenVec2,
 }
 ADDING_POINT :: struct {
     handle_in: WorldVec2,
@@ -36,6 +43,7 @@ ADDING_POINT :: struct {
 }
 DRAGGING_POINT :: struct {
     id: int,
+    part: Point_Part,
     position_last: ScreenVec2,
 }
 
@@ -79,17 +87,24 @@ editor_handle_event :: proc(editor_state: ^EditorState, e: ^Event) {
 handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
     #partial switch e.type {
     case .MOUSE_MOVE:
-        is.point_hovered = nil // No point hovered
+        is.point_hovered = nil
         for control_point, index in es.control_points {
-            if linalg.vector_length(world_to_screen(control_point.pos, es.camera, true) - es.mouse) < 8 {
+            switch {
+            case linalg.vector_length(world_to_screen(control_point.handle_in, es.camera, true) - es.mouse) < 6:
                 is.point_hovered = index
-                break
+                is.part = .IN
+            case linalg.vector_length(world_to_screen(control_point.handle_out, es.camera, true) - es.mouse) < 6:
+                is.point_hovered = index
+                is.part = .OUT
+            case linalg.vector_length(world_to_screen(control_point.pos, es.camera, true) - es.mouse) < 8:
+                is.point_hovered = index
+                is.part = .ANCHOR
             }
         }
     case .MOUSE_DOWN:
         if e.mouse_button != .LEFT do break
         if hovered, ok := is.point_hovered.?; ok {
-            set_state(es, DRAGGING_POINT { hovered, es.mouse })
+            set_state(es, DRAGGING_POINT { hovered, is.part, es.mouse })
         } else {
             // set_state(es, PANNING { es.camera.pos, es.mouse })
             pos := screen_to_world(es.mouse, es.camera, true)
@@ -139,9 +154,17 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
     #partial switch e.type {
     case .MOUSE_MOVE:
         mouse_world_delta := screen_to_world(is.position_last - es.mouse, es.camera, false)
-        es.control_points[is.id].handle_in  -= mouse_world_delta
-        es.control_points[is.id].pos        -= mouse_world_delta
-        es.control_points[is.id].handle_out -= mouse_world_delta
+
+        switch is.part {
+        case .ANCHOR:
+            es.control_points[is.id].handle_in  -= mouse_world_delta
+            es.control_points[is.id].pos        -= mouse_world_delta
+            es.control_points[is.id].handle_out -= mouse_world_delta
+        case .IN:
+            es.control_points[is.id].handle_in  -= mouse_world_delta
+        case .OUT:
+            es.control_points[is.id].handle_out  -= mouse_world_delta
+        }
         is.position_last = es.mouse
         es.should_rerender = true
     case .MOUSE_UP:
