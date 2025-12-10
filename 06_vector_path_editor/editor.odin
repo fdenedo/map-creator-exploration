@@ -10,6 +10,8 @@ EditorState :: struct {
     mouse: ScreenVec2,
     camera: Camera,
     control_points: [dynamic]Point,
+    paths: [dynamic]Path,
+    active_path: Maybe(int),
     should_rerender: bool,
     input: Input_State, // use set_state() to modify
 }
@@ -135,12 +137,22 @@ handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
         is.handle_out   = pos_out
         is.handle_in    = 2 * is.position_start - pos_out // same as pos_start + (pos_start - pos_out)
     case .MOUSE_UP:
-        // TODO: not using id for now, but need to soon
-        append(&es.control_points, Point{
+        new_point := Point{
             handle_in  = is.handle_in,
             pos        = is.position_start,
             handle_out = is.handle_out,
-        })
+        }
+        active_path, ok := es.active_path.?
+        if ok {
+            append(&es.paths[active_path].points, new_point)
+        } else {
+            new_path := Path {}
+            append(&new_path.points, new_point)
+            append(&es.paths, new_path)
+
+            es.active_path = len(es.paths) - 1
+        }
+        append(&es.control_points, new_point)
         es.should_rerender = true
         set_state(es, IDLE {})
     case .KEY_DOWN:
@@ -163,7 +175,7 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
         case .IN:
             es.control_points[is.id].handle_in  -= mouse_world_delta
         case .OUT:
-            es.control_points[is.id].handle_out  -= mouse_world_delta
+            es.control_points[is.id].handle_out -= mouse_world_delta
         }
         is.position_last = es.mouse
         es.should_rerender = true

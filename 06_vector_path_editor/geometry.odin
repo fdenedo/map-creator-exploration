@@ -7,6 +7,11 @@ Point :: struct {
     handle_out: WorldVec2,
 }
 
+Path :: struct {
+    id: int,
+    points: [dynamic]Point
+}
+
 HandleGeometry :: struct {
     lines: [dynamic]WorldVec2,
     anchor_points: [dynamic]WorldVec2,
@@ -34,47 +39,53 @@ generate_handle_geometry :: proc(control_points: []Point, out: ^HandleGeometry) 
     }
 }
 
-generate_path_geometry :: proc(control_points: []Point, out: ^PathGeometry) {
+generate_path_geometry :: proc(paths: []Path, out: ^PathGeometry) {
     clear(&out.curve_lines)
 
-    line_segments := 20
-    t_delta: f32 = 1 / f32(line_segments)
+    for path in paths {
+        for point, i in path.points {
+            if i == 0 do continue
+            append(&out.curve_lines, ..generate_bezier(path.points[i-1], point)[:])
+        }
+    }
+}
 
-    for point, i in control_points {
-        if i == 0 do continue
+generate_bezier :: proc(start: Point, end: Point) -> []WorldVec2 {
+    p0 := ([2]f32)(start.pos)
+    p1 := ([2]f32)(start.handle_out)
+    p2 := ([2]f32)(end.handle_in)
+    p3 := ([2]f32)(end.pos)
 
-        p0 := ([2]f32)(control_points[i-1].pos)
-        p1 := ([2]f32)(control_points[i-1].handle_out)
-        p2 := ([2]f32)(point.handle_in)
-        p3 := ([2]f32)(point.pos)
+    // Adaptive sampling
+    // Use a stack to hold samples to be evaluated
+    curve_samples: [dynamic][4][2]f32
+    append(&curve_samples, [4][2]f32{ p0, p1, p2, p3 })
 
-        // Adaptive sampling
-        // Use a stack to hold samples to be evaluated
-        curve_samples: [dynamic][4][2]f32
-        append(&curve_samples, [4][2]f32{ p0, p1, p2, p3 })
+    bezier: [dynamic]WorldVec2
 
-        for {
-            if len(curve_samples) < 1 do break
+    for {
+        if len(curve_samples) < 1 do break
 
-            segment_control_points := pop(&curve_samples)
-            if is_flat_enough(
+        segment_control_points := pop(&curve_samples)
+        if is_flat_enough(
+            segment_control_points[0],
+            segment_control_points[1],
+            segment_control_points[2],
+            segment_control_points[3],
+            0.001
+        ) {
+            append(&bezier, WorldVec2(segment_control_points[0]), WorldVec2(segment_control_points[3]))
+        } else {
+            left, right := split_bezier_cubic(
                 segment_control_points[0],
                 segment_control_points[1],
                 segment_control_points[2],
-                segment_control_points[3],
-                0.001
-            ) {
-                append(&out.curve_lines, WorldVec2(segment_control_points[0]), WorldVec2(segment_control_points[3]))
-            } else {
-                left, right := split_bezier_cubic(
-                    segment_control_points[0],
-                    segment_control_points[1],
-                    segment_control_points[2],
-                    segment_control_points[3]
-                )
-                // Add segments to the stack from right to left
-                append(&curve_samples, right, left)
-            }
+                segment_control_points[3]
+            )
+            // Add segments to the stack from right to left
+            append(&curve_samples, right, left)
         }
     }
+
+    return bezier[:]
 }

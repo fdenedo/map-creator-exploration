@@ -53,7 +53,7 @@ frame :: proc "c" () {
     context = default_context
     if (state.editor.should_rerender) {
         generate_handle_geometry(state.editor.control_points[:], &state.handle_geo)
-        generate_path_geometry(state.editor.control_points[:], &state.path_geo)
+        generate_path_geometry(state.editor.paths[:], &state.path_geo)
         render_update_geometry(&state.render, &state.handle_geo, &state.path_geo)
         state.editor.should_rerender = false
     }
