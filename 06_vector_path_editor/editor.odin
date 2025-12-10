@@ -9,7 +9,6 @@ Event :: sapp.Event
 EditorState :: struct {
     mouse: ScreenVec2,
     camera: Camera,
-    control_points: [dynamic]Point,
     paths: [dynamic]Path,
     active_path: Maybe(int),
     should_rerender: bool,
@@ -30,8 +29,13 @@ Point_Part :: enum {
     OUT
 }
 
+PointRef :: struct {
+    path_index: int,
+    point_index: int,
+}
+
 IDLE :: struct {
-    point_hovered: Maybe(int),
+    point_hovered: Maybe(PointRef),
     part: Point_Part,
 }
 PANNING :: struct {
@@ -44,7 +48,7 @@ ADDING_POINT :: struct {
     handle_out: WorldVec2,
 }
 DRAGGING_POINT :: struct {
-    id: int,
+    ref: PointRef,
     part: Point_Part,
     position_last: ScreenVec2,
 }
@@ -90,17 +94,20 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
     #partial switch e.type {
     case .MOUSE_MOVE:
         is.point_hovered = nil
-        for control_point, index in es.control_points {
-            switch {
-            case linalg.vector_length(world_to_screen(control_point.handle_in, es.camera, true) - es.mouse) < 6:
-                is.point_hovered = index
-                is.part = .IN
-            case linalg.vector_length(world_to_screen(control_point.handle_out, es.camera, true) - es.mouse) < 6:
-                is.point_hovered = index
-                is.part = .OUT
-            case linalg.vector_length(world_to_screen(control_point.pos, es.camera, true) - es.mouse) < 8:
-                is.point_hovered = index
-                is.part = .ANCHOR
+        for path, path_idx in es.paths {
+            for point, point_idx in path.points {
+                ref := PointRef { path_idx, point_idx }
+                switch {
+                case linalg.vector_length(world_to_screen(point.handle_in, es.camera, true) - es.mouse) < 6:
+                    is.point_hovered = ref
+                    is.part = .IN
+                case linalg.vector_length(world_to_screen(point.handle_out, es.camera, true) - es.mouse) < 6:
+                    is.point_hovered = ref
+                    is.part = .OUT
+                case linalg.vector_length(world_to_screen(point.pos, es.camera, true) - es.mouse) < 8:
+                    is.point_hovered = ref
+                    is.part = .ANCHOR
+                }
             }
         }
     case .MOUSE_DOWN:
@@ -152,7 +159,6 @@ handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
 
             es.active_path = len(es.paths) - 1
         }
-        append(&es.control_points, new_point)
         es.should_rerender = true
         set_state(es, IDLE {})
     case .KEY_DOWN:
@@ -166,16 +172,17 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
     #partial switch e.type {
     case .MOUSE_MOVE:
         mouse_world_delta := screen_to_world(is.position_last - es.mouse, es.camera, false)
+        point := &es.paths[is.ref.path_index].points[is.ref.point_index]
 
         switch is.part {
         case .ANCHOR:
-            es.control_points[is.id].handle_in  -= mouse_world_delta
-            es.control_points[is.id].pos        -= mouse_world_delta
-            es.control_points[is.id].handle_out -= mouse_world_delta
+            point.handle_in  -= mouse_world_delta
+            point.pos        -= mouse_world_delta
+            point.handle_out -= mouse_world_delta
         case .IN:
-            es.control_points[is.id].handle_in  -= mouse_world_delta
+            point.handle_in  -= mouse_world_delta
         case .OUT:
-            es.control_points[is.id].handle_out -= mouse_world_delta
+            point.handle_out -= mouse_world_delta
         }
         is.position_last = es.mouse
         es.should_rerender = true

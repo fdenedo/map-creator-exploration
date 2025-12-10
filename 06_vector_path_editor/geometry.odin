@@ -22,20 +22,22 @@ PathGeometry :: struct {
     curve_lines: [dynamic]WorldVec2,
 }
 
-generate_handle_geometry :: proc(control_points: []Point, out: ^HandleGeometry) {
+generate_handle_geometry :: proc(paths: []Path, out: ^HandleGeometry) {
     clear(&out.lines)
     clear(&out.anchor_points)
     clear(&out.handle_points)
 
-    for point in control_points {
-        append(&out.lines, point.handle_in)
-        append(&out.lines, point.pos)
-        append(&out.lines, point.pos)
-        append(&out.lines, point.handle_out)
+    for path in paths {
+        for point in path.points {
+            append(&out.lines, point.handle_in)
+            append(&out.lines, point.pos)
+            append(&out.lines, point.pos)
+            append(&out.lines, point.handle_out)
 
-        append(&out.anchor_points, point.pos)
-        append(&out.handle_points, point.handle_in)
-        append(&out.handle_points, point.handle_out)
+            append(&out.anchor_points, point.pos)
+            append(&out.handle_points, point.handle_in)
+            append(&out.handle_points, point.handle_out)
+        }
     }
 }
 
