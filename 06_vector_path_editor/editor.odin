@@ -123,6 +123,12 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
                 handle_out     = pos,
             })
         }
+    case .KEY_DOWN:
+        if e.key_code == .C && es.active_path != nil {
+            es.paths[es.active_path.?].closed = true
+            es.active_path = nil
+            es.should_rerender = true
+        }
     }
 }
 

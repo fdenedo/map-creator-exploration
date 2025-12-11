@@ -8,12 +8,13 @@ Point :: struct {
 }
 
 Path :: struct {
-    id: int,
-    points: [dynamic]Point
+    id:     int,
+    points: [dynamic]Point,
+    closed: bool,
 }
 
 HandleGeometry :: struct {
-    lines: [dynamic]WorldVec2,
+    lines:         [dynamic]WorldVec2,
     anchor_points: [dynamic]WorldVec2,
     handle_points: [dynamic]WorldVec2,
 }
@@ -48,6 +49,9 @@ generate_path_geometry :: proc(paths: []Path, out: ^PathGeometry) {
         for point, i in path.points {
             if i == 0 do continue
             append(&out.curve_lines, ..generate_bezier(path.points[i-1], point)[:])
+        }
+        if path.closed {
+            append(&out.curve_lines, ..generate_bezier(path.points[len(path.points)-1], path.points[0])[:])
         }
     }
 }
