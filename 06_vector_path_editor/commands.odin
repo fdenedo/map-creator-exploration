@@ -8,7 +8,7 @@ CommandHistory :: struct {
 
 history_init :: proc() -> CommandHistory {
     return CommandHistory{
-        commands      = make([dynamic]Command),
+        commands      = make([dynamic]Command), // TODO: implement circular buffer
         current_index = -1, // No history
         max_history   = 100
     }
@@ -58,13 +58,19 @@ Command :: struct {
 }
 
 CommandData :: union {
-    AddPoint
+    AddPoint,
+    ToggleClosePath,
 }
 
 AddPoint :: struct {
     path_id: int,
     point: Point,
     new_path_created: bool,
+}
+
+ToggleClosePath :: struct {
+    path_id: int,
+    was_closed: bool,
 }
 
 execute_add_point :: proc(cmd: ^AddPoint, state: ^EditorState) {
@@ -89,11 +95,23 @@ undo_add_point :: proc(cmd: ^AddPoint, state: ^EditorState) {
     }
 }
 
+execute_toggle_close_path :: proc(cmd: ^ToggleClosePath, state: ^EditorState) {
+    state.paths[cmd.path_id].closed = !cmd.was_closed
+    state.active_path = nil
+}
+
+undo_toggle_close_path :: proc(cmd: ^ToggleClosePath, state: ^EditorState) {
+    state.paths[cmd.path_id].closed = cmd.was_closed
+    state.active_path = cmd.path_id
+}
+
 @(private="file")
 command_execute :: proc(cmd: Command, state: ^EditorState) {
     switch &c in cmd.data {
     case AddPoint:
         execute_add_point(&c, state)
+    case ToggleClosePath:
+        execute_toggle_close_path(&c, state)
     }
     state.should_rerender = true
 }
@@ -103,6 +121,8 @@ command_undo :: proc(cmd: Command, state: ^EditorState) {
     switch &c in cmd.data {
     case AddPoint:
         undo_add_point(&c, state)
+    case ToggleClosePath:
+        undo_toggle_close_path(&c, state)
     }
     state.should_rerender = true
 }

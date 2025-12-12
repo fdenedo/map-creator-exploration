@@ -126,9 +126,15 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
         }
     case .KEY_DOWN:
         if e.key_code == .C && es.active_path != nil {
-            es.paths[es.active_path.?].closed = true
-            es.active_path = nil
-            es.should_rerender = true
+            cmd := Command {
+                name = "Close Path",
+                description = "Close an open path",
+                data = ToggleClosePath {
+                    path_id = es.active_path.?,
+                    was_closed = es.paths[es.active_path.?].closed
+                },
+            }
+            history_execute(&es.history, cmd, es)
         }
     }
 }
