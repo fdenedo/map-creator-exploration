@@ -13,6 +13,7 @@ EditorState :: struct {
     active_path: Maybe(int),
     should_rerender: bool,
     input: Input_State, // use set_state() to modify
+    history: CommandHistory,
 }
 
 // Current states:
@@ -43,9 +44,7 @@ PANNING :: struct {
     mouse_last_pos: ScreenVec2,
 }
 ADDING_POINT :: struct {
-    handle_in: WorldVec2,
-    position_start: WorldVec2,
-    handle_out: WorldVec2,
+    point: Point,
 }
 DRAGGING_POINT :: struct {
     ref: PointRef,
@@ -69,6 +68,7 @@ editor_init :: proc(editor_state: ^EditorState) {
     context = default_context
 
     log.debug("Initialising editor")
+    editor_state.history = history_init()
     editor_state.camera = create_camera()
     editor_state.should_rerender = true
     editor_state.input = IDLE {}
@@ -115,12 +115,13 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
         if hovered, ok := is.point_hovered.?; ok {
             set_state(es, DRAGGING_POINT { hovered, is.part, es.mouse })
         } else {
-            // set_state(es, PANNING { es.camera.pos, es.mouse })
             pos := screen_to_world(es.mouse, es.camera, true)
             set_state(es, ADDING_POINT {
-                handle_in      = pos,
-                position_start = pos,
-                handle_out     = pos,
+                point = {
+                    handle_in   = pos,
+                    pos         = pos,
+                    handle_out  = pos,
+                }
             })
         }
     case .KEY_DOWN:
@@ -146,26 +147,29 @@ handle_panning :: proc(es: ^EditorState, is: ^PANNING, e: ^Event) {
 handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
     #partial switch e.type {
     case .MOUSE_MOVE:
-        pos_out        := screen_to_world(es.mouse, es.camera, true)
-        is.handle_out   = pos_out
-        is.handle_in    = 2 * is.position_start - pos_out // same as pos_start + (pos_start - pos_out)
+        pos_out            := screen_to_world(es.mouse, es.camera, true)
+        is.point.handle_out = pos_out
+        is.point.handle_in  = 2 * is.point.pos - pos_out // same as pos + (pos - pos_out)
     case .MOUSE_UP:
-        new_point := Point{
-            handle_in  = is.handle_in,
-            pos        = is.position_start,
-            handle_out = is.handle_out,
-        }
-        active_path, ok := es.active_path.?
-        if ok {
-            append(&es.paths[active_path].points, new_point)
+        add_point_data: AddPoint
+        if active_path, ok := es.active_path.?; ok {
+            add_point_data = AddPoint {
+                path_id = active_path,
+                point = is.point,
+                new_path_created = false
+            }
         } else {
-            new_path := Path {}
-            append(&new_path.points, new_point)
-            append(&es.paths, new_path)
-
-            es.active_path = len(es.paths) - 1
+            add_point_data = AddPoint {
+                point = is.point,
+                new_path_created = true
+            }
         }
-        es.should_rerender = true
+        cmd := Command {
+            name = "Add Point",
+            description = "Add a point to path",
+            data = add_point_data,
+        }
+        history_execute(&es.history, cmd, es)
         set_state(es, IDLE {})
     case .KEY_DOWN:
         if e.key_code == .ESCAPE {
@@ -206,5 +210,9 @@ handle_global_events :: proc(es: ^EditorState, e: ^Event) {
         es.camera.zoom += e.scroll_y * 0.1
         es.camera.zoom = min(20.0, max(es.camera.zoom, 0.5))
         es.should_rerender = true
+    case .KEY_DOWN:
+        if e.key_code == .Z && e.modifiers & sapp.MODIFIER_CTRL != 0 { // TODO: add helper for this
+            history_undo(&es.history, es)
+        }
     }
 }
