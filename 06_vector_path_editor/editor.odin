@@ -205,7 +205,7 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
         is.position_last = es.mouse
         es.should_rerender = true
     case .MOUSE_UP:
-        es.input = IDLE {} // TODO: point_hovered is initialised to 0 here
+        es.input = IDLE {}
     }
 }
 
