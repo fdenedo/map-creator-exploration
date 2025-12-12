@@ -212,7 +212,14 @@ handle_global_events :: proc(es: ^EditorState, e: ^Event) {
         es.should_rerender = true
     case .KEY_DOWN:
         if e.key_code == .Z && e.modifiers & sapp.MODIFIER_CTRL != 0 { // TODO: add helper for this
-            history_undo(&es.history, es)
+            if e.modifiers & sapp.MODIFIER_SHIFT != 0 {
+                history_redo(&es.history, es)
+            } else {
+                history_undo(&es.history, es)
+            }
+        }
+        if e.key_code == .Y && e.modifiers & sapp.MODIFIER_CTRL != 0 {
+            history_redo(&es.history, es)
         }
     }
 }
