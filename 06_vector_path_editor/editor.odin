@@ -33,11 +33,11 @@ Point_Part :: enum {
 PointRef :: struct {
     path_index: int,
     point_index: int,
+    part: Point_Part,
 }
 
 IDLE :: struct {
     point_hovered: Maybe(PointRef),
-    part: Point_Part,
 }
 PANNING :: struct {
     camera_start: WorldVec2,
@@ -48,7 +48,6 @@ ADDING_POINT :: struct {
 }
 DRAGGING_POINT :: struct {
     ref: PointRef,
-    part: Point_Part,
     position_last: ScreenVec2,
 }
 
@@ -96,24 +95,27 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
         is.point_hovered = nil
         for path, path_idx in es.paths {
             for point, point_idx in path.points {
-                ref := PointRef { path_idx, point_idx }
+                ref := PointRef {
+                    path_index = path_idx,
+                    point_index = point_idx
+                }
                 switch {
-                case linalg.vector_length(world_to_screen(point.handle_in, es.camera, true) - es.mouse) < 6:
-                    is.point_hovered = ref
-                    is.part = .IN
-                case linalg.vector_length(world_to_screen(point.handle_out, es.camera, true) - es.mouse) < 6:
-                    is.point_hovered = ref
-                    is.part = .OUT
                 case linalg.vector_length(world_to_screen(point.pos, es.camera, true) - es.mouse) < 8:
+                    ref.part = .ANCHOR
                     is.point_hovered = ref
-                    is.part = .ANCHOR
+                case linalg.vector_length(world_to_screen(point.handle_out, es.camera, true) - es.mouse) < 6:
+                    ref.part = .OUT
+                    is.point_hovered = ref
+                case linalg.vector_length(world_to_screen(point.handle_in, es.camera, true) - es.mouse) < 6:
+                    ref.part = .IN
+                    is.point_hovered = ref
                 }
             }
         }
     case .MOUSE_DOWN:
         if e.mouse_button != .LEFT do break
         if hovered, ok := is.point_hovered.?; ok {
-            set_state(es, DRAGGING_POINT { hovered, is.part, es.mouse })
+            set_state(es, DRAGGING_POINT { hovered, es.mouse })
         } else {
             pos := screen_to_world(es.mouse, es.camera, true)
             set_state(es, ADDING_POINT {
@@ -190,7 +192,7 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
         mouse_world_delta := screen_to_world(is.position_last - es.mouse, es.camera, false)
         point := &es.paths[is.ref.path_index].points[is.ref.point_index]
 
-        switch is.part {
+        switch is.ref.part {
         case .ANCHOR:
             point.handle_in  -= mouse_world_delta
             point.pos        -= mouse_world_delta
