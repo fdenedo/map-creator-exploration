@@ -60,6 +60,7 @@ Command :: struct {
 CommandData :: union {
     AddPoint,
     ToggleClosePath,
+    MovePoint,
 }
 
 AddPoint :: struct {
@@ -71,6 +72,11 @@ AddPoint :: struct {
 ToggleClosePath :: struct {
     path_id: int,
     was_closed: bool,
+}
+
+MovePoint :: struct {
+    ref: PointRef,
+    from, to: WorldVec2,
 }
 
 execute_add_point :: proc(cmd: ^AddPoint, state: ^EditorState) {
@@ -105,6 +111,36 @@ undo_toggle_close_path :: proc(cmd: ^ToggleClosePath, state: ^EditorState) {
     state.active_path = cmd.path_id
 }
 
+execute_move_point :: proc(cmd: ^MovePoint, state: ^EditorState) {
+    point := &state.paths[cmd.ref.path_index].points[cmd.ref.point_index]
+    switch cmd.ref.part {
+    case .ANCHOR:
+        delta := cmd.to - cmd.from
+        point.pos = cmd.to
+        point.handle_in += delta
+        point.handle_out += delta
+    case .OUT:
+        point.handle_out = cmd.to
+    case .IN:
+        point.handle_in = cmd.to
+    }
+}
+
+undo_move_point :: proc(cmd: ^MovePoint, state: ^EditorState) {
+    point := &state.paths[cmd.ref.path_index].points[cmd.ref.point_index]
+    switch cmd.ref.part {
+    case .ANCHOR:
+        delta := cmd.from - cmd.to
+        point.pos = cmd.from
+        point.handle_in += delta
+        point.handle_out += delta
+    case .OUT:
+        point.handle_out = cmd.from
+    case .IN:
+        point.handle_in = cmd.from
+    }
+}
+
 @(private="file")
 command_execute :: proc(cmd: Command, state: ^EditorState) {
     switch &c in cmd.data {
@@ -112,6 +148,8 @@ command_execute :: proc(cmd: Command, state: ^EditorState) {
         execute_add_point(&c, state)
     case ToggleClosePath:
         execute_toggle_close_path(&c, state)
+    case MovePoint:
+        execute_move_point(&c, state)
     }
     state.should_rerender = true
 }
@@ -123,6 +161,8 @@ command_undo :: proc(cmd: Command, state: ^EditorState) {
         undo_add_point(&c, state)
     case ToggleClosePath:
         undo_toggle_close_path(&c, state)
+    case MovePoint:
+        undo_move_point(&c, state)
     }
     state.should_rerender = true
 }

@@ -23,13 +23,15 @@ PathGeometry :: struct {
     curve_lines: [dynamic]WorldVec2,
 }
 
-generate_handle_geometry :: proc(paths: []Path, out: ^HandleGeometry) {
+generate_handle_geometry :: proc(es: ^EditorState, out: ^HandleGeometry) {
     clear(&out.lines)
     clear(&out.anchor_points)
     clear(&out.handle_points)
 
-    for path in paths {
-        for point in path.points {
+    for path, path_idx in es.paths {
+        for _, point_idx in path.points {
+            point := get_effective_point(es, path_idx, point_idx)
+
             append(&out.lines, point.handle_in)
             append(&out.lines, point.pos)
             append(&out.lines, point.pos)
@@ -42,16 +44,20 @@ generate_handle_geometry :: proc(paths: []Path, out: ^HandleGeometry) {
     }
 }
 
-generate_path_geometry :: proc(paths: []Path, out: ^PathGeometry) {
+generate_path_geometry :: proc(es: ^EditorState, out: ^PathGeometry) {
     clear(&out.curve_lines)
 
-    for path in paths {
-        for point, i in path.points {
+    for path, path_index in es.paths {
+        for _, i in path.points {
             if i == 0 do continue
-            append(&out.curve_lines, ..generate_bezier(path.points[i-1], point)[:])
+            start_point := get_effective_point(es, path_index, i-1)
+            end_point := get_effective_point(es, path_index, i)
+            append(&out.curve_lines, ..generate_bezier(start_point, end_point)[:])
         }
         if path.closed {
-            append(&out.curve_lines, ..generate_bezier(path.points[len(path.points)-1], path.points[0])[:])
+            start_point := get_effective_point(es, path_index, len(path.points)-1)
+            end_point := get_effective_point(es, path_index, 0)
+            append(&out.curve_lines, ..generate_bezier(start_point, end_point)[:])
         }
     }
 }
