@@ -185,7 +185,7 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
             point, _ := find_point(path, hovered.point_id)
             set_state(es, DRAGGING_POINT {
                 ref = hovered,
-                original_point = point^, // TODO: maybe we do want the point reference here, so we can just operate on it directly
+                original_point = point^,
                 current_offset = {0, 0},
             })
         } else {
@@ -221,7 +221,7 @@ handle_panning :: proc(es: ^EditorState, is: ^PANNING, e: ^Event) {
         es.camera.pos -= screen_to_world(mouse_delta, es.camera, false)
         is.mouse_last_pos = es.mouse
     case .MOUSE_UP:
-        es.input = IDLE {} // TODO: point_hovered is initialised to 0 here
+        es.input = IDLE {}
     }
 }
 
@@ -260,10 +260,8 @@ handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
 handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) {
     #partial switch e.type {
     case .MOUSE_MOVE:
-        // Calculate offset from mouse movement
         mouse_world := screen_to_world(es.mouse, es.camera, true)
 
-        // Get the original position of the part being dragged
         original_pos: WorldVec2
         switch is.ref.part {
         case .ANCHOR:
@@ -274,12 +272,11 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
             original_pos = is.original_point.handle_out
         }
 
-        // Update offset (this is the only state we modify)
+        // Update offset - don't update actual point yet
         is.current_offset = mouse_world - original_pos
         es.should_rerender = true
 
     case .MOUSE_UP:
-        // Calculate final position
         pos_from, pos_to: WorldVec2
         switch is.ref.part {
         case .ANCHOR:
@@ -299,7 +296,6 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
             break
         }
 
-        // Execute command (data is still in original state)
         cmd := Command {
             name = "Move Point",
             description = "Move a point to a position",
@@ -314,7 +310,6 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
 
     case .KEY_DOWN:
         if e.key_code == .ESCAPE {
-            // Just discard - data was never modified
             es.should_rerender = true
             set_state(es, IDLE {})
         }
