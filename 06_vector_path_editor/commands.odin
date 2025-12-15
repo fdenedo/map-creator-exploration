@@ -65,7 +65,6 @@ CommandData :: union {
 
 AddPoint :: struct {
     path_id: int,
-    point_id: int,
     point: Point,
     new_path_created: bool,
 }
@@ -81,34 +80,17 @@ MovePoint :: struct {
 }
 
 execute_add_point :: proc(cmd: ^AddPoint, state: ^EditorState) {
-    // TODO: there is too much orchestration of editor state here
-    // move orchestration - for example, cmd should always have a path id
-    // and it shouldn't be populated here
-    new_point := cmd.point
-
-    // Only generate new IDs if not already set (first execution, not redo)
-    // TODO: this is a mess really, need to make this more explicit
-    // could init as -1
-    if cmd.point_id == 0 {
-        new_point.id = get_next_point_id(state)
-        cmd.point_id = new_point.id
-    } else {
-        new_point.id = cmd.point_id
-    }
-
     if cmd.new_path_created {
         new_path := Path {
-            id = cmd.path_id if cmd.path_id != 0 else get_next_path_id(state),
+            id = cmd.path_id,
             points = make([dynamic]Point)
         }
-        cmd.path_id = new_path.id // TODO: move to Editor
-
-        append(&new_path.points, new_point)
+        append(&new_path.points, cmd.point)
         append(&state.paths, new_path)
         state.active_path = new_path.id
     } else {
         path, _ := find_path(state, cmd.path_id)
-        append(&path.points, new_point)
+        append(&path.points, cmd.point)
     }
 }
 
@@ -120,7 +102,7 @@ undo_add_point :: proc(cmd: ^AddPoint, state: ^EditorState) {
         state.active_path = nil
     } else {
         path, _ := find_path(state, cmd.path_id)
-        _, point_index := find_point(path, cmd.point_id)
+        _, point_index := find_point(path, cmd.point.id)
         ordered_remove(&path.points, point_index)
     }
 }

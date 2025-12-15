@@ -233,17 +233,15 @@ handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
         is.point.handle_in  = 2 * is.point.pos - pos_out // same as pos + (pos - pos_out)
     case .MOUSE_UP:
         add_point_data: AddPoint
+        add_point_data.point = is.point
+        add_point_data.point.id = get_next_point_id(es)
+
         if active_path, ok := es.active_path.?; ok {
-            add_point_data = AddPoint {
-                path_id = active_path,
-                point = is.point,
-                new_path_created = false
-            }
+            add_point_data.path_id = active_path
+            add_point_data.new_path_created = false
         } else {
-            add_point_data = AddPoint {
-                point = is.point,
-                new_path_created = true
-            }
+            add_point_data.path_id = get_next_path_id(es)
+            add_point_data.new_path_created = true
         }
         cmd := Command {
             name = "Add Point",
