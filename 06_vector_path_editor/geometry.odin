@@ -77,6 +77,10 @@ generate_bezier :: proc(start: Point, end: Point) -> []WorldVec2 {
     for {
         if len(curve_samples) < 1 do break
 
+        // TODO: adaptive sampling should use a tolerance based on the pixel density
+        // as we still end up with straight lines in very curved sections, and as we calculate
+        // solely in world space, the samples aren't determined by zoom level.
+        // In other words, the threshold should be adaptive itself
         segment_control_points := pop(&curve_samples)
         if is_flat_enough(
             segment_control_points[0],
