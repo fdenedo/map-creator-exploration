@@ -65,6 +65,7 @@ CommandData :: union {
 
 AddPoint :: struct {
     path_id: int,
+    point_id: int,
     point: Point,
     new_path_created: bool,
 }
@@ -80,39 +81,65 @@ MovePoint :: struct {
 }
 
 execute_add_point :: proc(cmd: ^AddPoint, state: ^EditorState) {
-    if cmd.new_path_created {
-        new_path := Path{ points = make([dynamic]Point) }
-        append(&new_path.points, cmd.point)
-        append(&state.paths, new_path)
-        cmd.path_id = len(state.paths) - 1
-        state.active_path = cmd.path_id
+    // TODO: there is too much orchestration of editor state here
+    // move orchestration - for example, cmd should always have a path id
+    // and it shouldn't be populated here
+    new_point := cmd.point
+
+    // Only generate new IDs if not already set (first execution, not redo)
+    // TODO: this is a mess really, need to make this more explicit
+    // could init as -1
+    if cmd.point_id == 0 {
+        new_point.id = get_next_point_id(state)
+        cmd.point_id = new_point.id
     } else {
-        append(&state.paths[cmd.path_id].points, cmd.point)
+        new_point.id = cmd.point_id
+    }
+
+    if cmd.new_path_created {
+        new_path := Path {
+            id = cmd.path_id if cmd.path_id != 0 else get_next_path_id(state),
+            points = make([dynamic]Point)
+        }
+        cmd.path_id = new_path.id // TODO: move to Editor
+
+        append(&new_path.points, new_point)
+        append(&state.paths, new_path)
+        state.active_path = new_path.id
+    } else {
+        path, _ := find_path(state, cmd.path_id)
+        append(&path.points, new_point)
     }
 }
 
 undo_add_point :: proc(cmd: ^AddPoint, state: ^EditorState) {
     if cmd.new_path_created {
-        delete(state.paths[len(state.paths) - 1].points)
-        pop(&state.paths)
+        path, path_index := find_path(state, cmd.path_id)
+        delete(path.points)
+        ordered_remove(&state.paths, path_index)
         state.active_path = nil
     } else {
-        pop(&state.paths[cmd.path_id].points)
+        path, _ := find_path(state, cmd.path_id)
+        _, point_index := find_point(path, cmd.point_id)
+        ordered_remove(&path.points, point_index)
     }
 }
 
 execute_toggle_close_path :: proc(cmd: ^ToggleClosePath, state: ^EditorState) {
-    state.paths[cmd.path_id].closed = !cmd.was_closed
-    state.active_path = nil
+    path, _ := find_path(state, cmd.path_id)
+    path.closed = !cmd.was_closed
+    state.active_path = nil // TODO: editor orchestration, move to caller
 }
 
 undo_toggle_close_path :: proc(cmd: ^ToggleClosePath, state: ^EditorState) {
-    state.paths[cmd.path_id].closed = cmd.was_closed
-    state.active_path = cmd.path_id
+    path, _ := find_path(state, cmd.path_id)
+    path.closed = cmd.was_closed
+    state.active_path = cmd.path_id // TODO: editor orchestration, move to caller
 }
 
 execute_move_point :: proc(cmd: ^MovePoint, state: ^EditorState) {
-    point := &state.paths[cmd.ref.path_index].points[cmd.ref.point_index]
+    path, _ := find_path(state, cmd.ref.path_id)
+    point, _ := find_point(path, cmd.ref.point_id)
     switch cmd.ref.part {
     case .ANCHOR:
         delta := cmd.to - cmd.from
@@ -127,7 +154,8 @@ execute_move_point :: proc(cmd: ^MovePoint, state: ^EditorState) {
 }
 
 undo_move_point :: proc(cmd: ^MovePoint, state: ^EditorState) {
-    point := &state.paths[cmd.ref.path_index].points[cmd.ref.point_index]
+    path, _ := find_path(state, cmd.ref.path_id)
+    point, _ := find_point(path, cmd.ref.point_id)
     switch cmd.ref.part {
     case .ANCHOR:
         delta := cmd.from - cmd.to

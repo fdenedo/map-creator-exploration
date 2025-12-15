@@ -10,18 +10,32 @@ EditorState :: struct {
     mouse: ScreenVec2,
     camera: Camera,
     paths: [dynamic]Path,
+    next_path_id: int,
+    next_point_id: int,
     active_path: Maybe(int),
     should_rerender: bool,
     input: Input_State, // use set_state() to modify
     history: CommandHistory,
 }
 
+get_next_path_id :: proc(state: ^EditorState) -> int {
+    id := state.next_path_id
+    state.next_path_id += 1
+    return id
+}
+
+get_next_point_id :: proc(state: ^EditorState) -> int {
+    id := state.next_point_id
+    state.next_point_id += 1
+    return id
+}
+
 // Current states:
 // IDLE             - nothing's happening
 //                    currently this is the only state where hovering points is allowed
 // PANNING          - changes where the camera is looking
-// ADDING_POINT     - not yet implemented, adds point to the list/struct/array/whatever
-//                    of control points (probably along with handles)
+// ADDING_POINT     - adds point to the list/struct/array/whatever of control points (probably
+//                    along with handles)
 // DRAGGING_POINT   - changes the position of a pre-existing point
 
 Point_Part :: enum {
@@ -31,13 +45,19 @@ Point_Part :: enum {
 }
 
 PointRef :: struct {
-    path_index: int,
-    point_index: int,
+    path_id: int,
+    point_id: int,
     part: Point_Part,
 }
 
 IDLE :: struct {
     point_hovered: Maybe(PointRef),
+}
+SELECT_PATH :: struct {
+    path_id: int,
+}
+SELECT_POINT :: struct {
+    point_id: int,
 }
 PANNING :: struct {
     camera_start: WorldVec2,
@@ -59,31 +79,54 @@ Input_State :: union {
     DRAGGING_POINT,
 }
 
+find_path :: proc(es: ^EditorState, id: int) -> (^Path, int) {
+    for &path, index in es.paths {
+        if path.id == id do return &path, index
+    }
+    return nil, -1
+}
+
+// TODO: point ids aren't assigned relative to path, but this is fine for now
+// might want to move to a node-based structure in the future
+// might also use an R-tree for spatial data
+find_point :: proc(path: ^Path, id: int) -> (^Point, int) {
+    for &point, index in path.points {
+        if point.id == id do return &point, index
+    }
+    return nil, -1
+}
+
 set_state :: proc(es: ^EditorState, new_state: Input_State) {
     // TODO: add some debug logging in here perhaps
     es.input = new_state
 }
 
 // Get the effective point for rendering, accounting for drag preview
-get_effective_point :: proc(es: ^EditorState, path_index: int, point_index: int) -> Point {
-    point := es.paths[path_index].points[point_index]
+// TODO: might be better to reverse the direction of this
+// e.g. right now this is coded to get the effective point for all points
+// but we could organise the code so that if we are in dragging point, we only call this
+// for the point in question
+get_effective_point :: proc(es: ^EditorState, path_id: int, point_id: int) -> Point {
+    path, _ := find_path(es, path_id)
+    point, _ := find_point(path, point_id)
+    point_effective := point^ // Dereference
 
     if drag_state, ok := es.input.(DRAGGING_POINT); ok {
-        if drag_state.ref.path_index == path_index && drag_state.ref.point_index == point_index {
+        if drag_state.ref.path_id == path_id && drag_state.ref.point_id == point_id {
             switch drag_state.ref.part {
             case .ANCHOR:
-                point.pos        += drag_state.current_offset
-                point.handle_in  += drag_state.current_offset
-                point.handle_out += drag_state.current_offset
+                point_effective.pos        += drag_state.current_offset
+                point_effective.handle_in  += drag_state.current_offset
+                point_effective.handle_out += drag_state.current_offset
             case .IN:
-                point.handle_in  += drag_state.current_offset
+                point_effective.handle_in  += drag_state.current_offset
             case .OUT:
-                point.handle_out += drag_state.current_offset
+                point_effective.handle_out += drag_state.current_offset
             }
         }
     }
 
-    return point
+    return point_effective
 }
 
 editor_init :: proc(editor_state: ^EditorState) {
@@ -116,11 +159,11 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
     #partial switch e.type {
     case .MOUSE_MOVE:
         is.point_hovered = nil
-        for path, path_idx in es.paths {
-            for point, point_idx in path.points {
+        for path in es.paths {
+            for point in path.points {
                 ref := PointRef {
-                    path_index = path_idx,
-                    point_index = point_idx
+                    path_id = path.id,
+                    point_id = point.id,
                 }
                 switch {
                 case linalg.vector_length(world_to_screen(point.pos, es.camera, true) - es.mouse) < 8:
@@ -138,10 +181,11 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
     case .MOUSE_DOWN:
         if e.mouse_button != .LEFT do break
         if hovered, ok := is.point_hovered.?; ok {
-            point := es.paths[hovered.path_index].points[hovered.point_index]
+            path, _ := find_path(es, hovered.path_id)
+            point, _ := find_point(path, hovered.point_id)
             set_state(es, DRAGGING_POINT {
                 ref = hovered,
-                original_point = point,
+                original_point = point^, // TODO: maybe we do want the point reference here, so we can just operate on it directly
                 current_offset = {0, 0},
             })
         } else {
@@ -156,12 +200,13 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
         }
     case .KEY_DOWN:
         if e.key_code == .C && es.active_path != nil {
+            path, _ := find_path(es, es.active_path.?)
             cmd := Command {
                 name = "Close Path",
                 description = "Close an open path",
                 data = ToggleClosePath {
                     path_id = es.active_path.?,
-                    was_closed = es.paths[es.active_path.?].closed
+                    was_closed = path.closed
                 },
             }
             history_execute(&es.history, cmd, es)

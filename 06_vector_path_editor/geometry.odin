@@ -28,18 +28,18 @@ generate_handle_geometry :: proc(es: ^EditorState, out: ^HandleGeometry) {
     clear(&out.anchor_points)
     clear(&out.handle_points)
 
-    for path, path_idx in es.paths {
-        for _, point_idx in path.points {
-            point := get_effective_point(es, path_idx, point_idx)
+    for path in es.paths {
+        for point in path.points {
+            point_effective := get_effective_point(es, path.id, point.id)
 
-            append(&out.lines, point.handle_in)
-            append(&out.lines, point.pos)
-            append(&out.lines, point.pos)
-            append(&out.lines, point.handle_out)
+            append(&out.lines, point_effective.handle_in)
+            append(&out.lines, point_effective.pos)
+            append(&out.lines, point_effective.pos)
+            append(&out.lines, point_effective.handle_out)
 
-            append(&out.anchor_points, point.pos)
-            append(&out.handle_points, point.handle_in)
-            append(&out.handle_points, point.handle_out)
+            append(&out.anchor_points, point_effective.pos)
+            append(&out.handle_points, point_effective.handle_in)
+            append(&out.handle_points, point_effective.handle_out)
         }
     }
 }
@@ -47,16 +47,15 @@ generate_handle_geometry :: proc(es: ^EditorState, out: ^HandleGeometry) {
 generate_path_geometry :: proc(es: ^EditorState, out: ^PathGeometry) {
     clear(&out.curve_lines)
 
-    for path, path_index in es.paths {
-        for _, i in path.points {
-            if i == 0 do continue
-            start_point := get_effective_point(es, path_index, i-1)
-            end_point := get_effective_point(es, path_index, i)
+    for path in es.paths {
+        for i in 1..<len(path.points) {
+            start_point := get_effective_point(es, path.id, path.points[i-1].id)
+            end_point := get_effective_point(es, path.id, path.points[i].id)
             append(&out.curve_lines, ..generate_bezier(start_point, end_point)[:])
         }
-        if path.closed {
-            start_point := get_effective_point(es, path_index, len(path.points)-1)
-            end_point := get_effective_point(es, path_index, 0)
+        if path.closed && len(path.points) > 0 {
+            start_point := get_effective_point(es, path.id, path.points[len(path.points)-1].id)
+            end_point := get_effective_point(es, path.id, path.points[0].id)
             append(&out.curve_lines, ..generate_bezier(start_point, end_point)[:])
         }
     }
