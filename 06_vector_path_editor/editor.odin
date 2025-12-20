@@ -13,6 +13,7 @@ EditorState :: struct {
     next_path_id: int,
     next_point_id: int,
     active_path: Maybe(int),
+    selected_point: Maybe(PointRef),
     should_rerender: bool,
     input: Input_State, // use set_state() to modify
     history: CommandHistory,
@@ -39,8 +40,8 @@ get_next_point_id :: proc(state: ^EditorState) -> int {
 // DRAGGING_POINT   - changes the position of a pre-existing point
 
 Point_Part :: enum {
+    ANCHOR = 0,
     IN,
-    ANCHOR,
     OUT
 }
 
@@ -53,18 +54,17 @@ PointRef :: struct {
 IDLE :: struct {
     point_hovered: Maybe(PointRef),
 }
-SELECT_PATH :: struct {
-    path_id: int,
-}
-SELECT_POINT :: struct {
-    point_id: int,
-}
 PANNING :: struct {
     camera_start: WorldVec2,
     mouse_last_pos: ScreenVec2,
 }
 ADDING_POINT :: struct {
     point: Point,
+}
+POTENTIAL_DRAG :: struct {
+    ref: PointRef,
+    original_point: Point,
+    mouse_down_pos: ScreenVec2,
 }
 DRAGGING_POINT :: struct {
     ref: PointRef,
@@ -76,6 +76,7 @@ Input_State :: union {
     IDLE,
     PANNING,
     ADDING_POINT,
+    POTENTIAL_DRAG,
     DRAGGING_POINT,
 }
 
@@ -149,6 +150,8 @@ editor_handle_event :: proc(editor_state: ^EditorState, e: ^Event) {
         handle_panning(editor_state, &s, e)
     case ADDING_POINT:
         handle_adding_point(editor_state, &s, e)
+    case POTENTIAL_DRAG:
+        handle_potential_drag(editor_state, &s, e)
     case DRAGGING_POINT:
         handle_dragging_point(editor_state, &s, e)
     }
@@ -156,6 +159,8 @@ editor_handle_event :: proc(editor_state: ^EditorState, e: ^Event) {
 }
 
 handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
+    context = default_context
+
     #partial switch e.type {
     case .MOUSE_MOVE:
         is.point_hovered = nil
@@ -183,12 +188,13 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
         if hovered, ok := is.point_hovered.?; ok {
             path, _ := find_path(es, hovered.path_id)
             point, _ := find_point(path, hovered.point_id)
-            set_state(es, DRAGGING_POINT {
+            set_state(es, POTENTIAL_DRAG {
                 ref = hovered,
                 original_point = point^,
-                current_offset = {0, 0},
+                mouse_down_pos = es.mouse,
             })
         } else {
+            es.selected_point = nil
             pos := screen_to_world(es.mouse, es.camera, true)
             set_state(es, ADDING_POINT {
                 point = {
@@ -249,6 +255,30 @@ handle_adding_point :: proc(es: ^EditorState, is: ^ADDING_POINT, e: ^Event) {
             data = add_point_data,
         }
         history_execute(&es.history, cmd, es)
+        set_state(es, IDLE {})
+    case .KEY_DOWN:
+        if e.key_code == .ESCAPE {
+            set_state(es, IDLE {})
+        }
+    }
+}
+
+handle_potential_drag :: proc(es: ^EditorState, is: ^POTENTIAL_DRAG, e: ^Event) {
+    DRAG_THRESHOLD :: 5.0 // pixels
+
+    #partial switch e.type {
+    case .MOUSE_MOVE:
+        mouse_delta := linalg.vector_length(es.mouse - is.mouse_down_pos)
+
+        if mouse_delta > DRAG_THRESHOLD {
+            set_state(es, DRAGGING_POINT {
+                ref = is.ref,
+                original_point = is.original_point,
+                current_offset = {0, 0},
+            })
+        }
+    case .MOUSE_UP:
+        es.selected_point = is.ref
         set_state(es, IDLE {})
     case .KEY_DOWN:
         if e.key_code == .ESCAPE {
