@@ -52,12 +52,28 @@ init :: proc "c" () {
 frame :: proc "c" () {
     context = default_context
     if (state.editor.should_rerender) {
+        // Stable state that doesn't necessaarily need to be recalculated or changed per frame
         generate_handle_geometry(&state.editor, &state.handle_geo)
         generate_path_geometry(&state.editor, &state.path_geo)
         render_update_geometry(&state.render, &state.handle_geo, &state.path_geo)
         state.editor.should_rerender = false
     }
-    render_frame(&state.render, state.editor.camera)
+
+    // Transient visual state (evaluated every frame)
+    // TODO: move to its own function (things that need to be recalculated every frame)
+    hovered_point: Maybe(SpecialPoint)
+    if idle, ok := state.editor.input.(IDLE); ok {
+        if ref, ok := idle.point_hovered.?; ok {
+            hovered_point = resolve_special_point(&state.editor, ref)
+        }
+    }
+
+    selected_point: Maybe(SpecialPoint)
+    if ref, ok := state.editor.selected_point.?; ok {
+        selected_point = resolve_special_point(&state.editor, ref)
+    }
+
+    render_frame(&state.render, state.editor.camera, hovered_point, selected_point)
 }
 
 cleanup :: proc "c" () {

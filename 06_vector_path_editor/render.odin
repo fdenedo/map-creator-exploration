@@ -70,13 +70,17 @@ point_renderer_update :: proc(r: ^PointRenderer, points: []WorldVec2) {
     }
 }
 
-point_renderer_draw :: proc(r: ^PointRenderer, uniforms: ^Vs_Params, point_size: f32) {
+point_renderer_draw :: proc(r: ^PointRenderer, uniforms: ^Vs_Params, point_size: f32, color: [4]f32 = {0.75, 0.75, 1.0, 1.0}) {
     if r.count == 0 do return
 
     sg.apply_pipeline(r.pipeline)
     sg.apply_bindings({ vertex_buffers = { 0 = r.buffer_quad, 1 = r.ibuffer } })
     uniforms.u_point_size = point_size
     sg.apply_uniforms(UB_vs_params, { ptr = uniforms, size = size_of(Vs_Params) })
+
+    fs_uniforms := Fs_Params { u_color = color }
+    sg.apply_uniforms(UB_fs_params, { ptr = &fs_uniforms, size = size_of(Fs_Params) })
+
     sg.draw(0, 4, r.count)
 }
 
@@ -168,6 +172,9 @@ RenderState :: struct {
     handle_lines: LineRenderer,
     handles: PointRenderer,
     anchors: PointRenderer,
+
+    // Single-point renderer for hovered/selected states
+    special_point: PointRenderer,
 }
 
 render_init :: proc(r: ^RenderState) {
@@ -184,6 +191,7 @@ render_init :: proc(r: ^RenderState) {
     line_renderer_init(&r.handle_lines, r.shader_line)
     point_renderer_init(&r.handles, r.shader_point)
     point_renderer_init(&r.anchors, r.shader_point)
+    point_renderer_init(&r.special_point, r.shader_point)
 }
 
 render_update_geometry :: proc(r: ^RenderState, handle_geo: ^HandleGeometry, path_geo: ^PathGeometry) {
@@ -195,7 +203,7 @@ render_update_geometry :: proc(r: ^RenderState, handle_geo: ^HandleGeometry, pat
     point_renderer_update(&r.anchors, handle_geo.anchor_points[:])
 }
 
-render_frame :: proc(r: ^RenderState, camera: Camera) {
+render_frame :: proc(r: ^RenderState, camera: Camera, hovered_point: Maybe(SpecialPoint), selected_point: Maybe(SpecialPoint)) {
     context = default_context
 
     sg.begin_pass({
@@ -208,10 +216,26 @@ render_frame :: proc(r: ^RenderState, camera: Camera) {
         u_viewport_size = { sapp.widthf(), sapp.heightf() },
     }
 
+    HOVER_SCALE        :: 1.4
+    SELECTED_DOT_SCALE :: 0.4
+    WHITE              :: [4]f32{ 1.0, 1.0, 1.0, 1.0 }
+
     line_renderer_draw(&r.curve_lines, &uniforms, 1.0)
     line_renderer_draw(&r.handle_lines, &uniforms, 1.0)
-    point_renderer_draw(&r.handles, &uniforms, 3.0)
-    point_renderer_draw(&r.anchors, &uniforms, 6.0)
+    point_renderer_draw(&r.handles, &uniforms, HANDLE_SIZE)
+    point_renderer_draw(&r.anchors, &uniforms, ANCHOR_SIZE)
+
+    // Draw hovered point (enlarged)
+    if sp, ok := hovered_point.?; ok {
+        point_renderer_update(&r.special_point, { sp.pos })
+        point_renderer_draw(&r.special_point, &uniforms, sp.size * HOVER_SCALE)
+    }
+
+    // Draw selected point (white centre dot)
+    if sp, ok := selected_point.?; ok {
+        point_renderer_update(&r.special_point, { sp.pos })
+        point_renderer_draw(&r.special_point, &uniforms, sp.size * SELECTED_DOT_SCALE, WHITE)
+    }
 
     sg.end_pass()
     sg.commit()

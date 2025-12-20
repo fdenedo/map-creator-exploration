@@ -74,6 +74,10 @@ void main() {
 */
 @fs fs_handle
 
+layout(binding=1) uniform fs_params {
+    vec4 u_color;
+};
+
 in vec2 v_uv;
 out vec4 color;
 
@@ -92,7 +96,7 @@ void main() {
         discard;
     }
 
-    color = vec4(.75, .75, 1.0, alpha);
+    color = vec4(u_color.rgb, u_color.a * alpha);
 }
 @end
 
