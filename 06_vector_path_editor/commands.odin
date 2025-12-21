@@ -61,6 +61,7 @@ CommandData :: union {
     AddPoint,
     ToggleClosePath,
     MovePoint,
+    DeletePoint,
 }
 
 AddPoint :: struct {
@@ -77,6 +78,13 @@ ToggleClosePath :: struct {
 MovePoint :: struct {
     ref: PointRef,
     from, to: WorldVec2,
+}
+
+DeletePoint :: struct {
+    ref: PointRef,
+    index: int,
+    deleted_point: Point,
+    path_was_deleted: bool,
 }
 
 execute_add_point :: proc(cmd: ^AddPoint, state: ^EditorState) {
@@ -151,6 +159,35 @@ undo_move_point :: proc(cmd: ^MovePoint, state: ^EditorState) {
     }
 }
 
+execute_delete_point :: proc(cmd: ^DeletePoint, state: ^EditorState) {
+    path, path_index := find_path(state, cmd.ref.path_id)
+    if path_index == -1 do return
+
+    ordered_remove(&path.points, cmd.index)
+
+    if cmd.path_was_deleted {
+        delete(path.points)
+        ordered_remove(&state.paths, path_index)
+        if state.active_path == cmd.ref.path_id {
+            state.active_path = nil
+        }
+    }
+}
+
+undo_delete_point :: proc(cmd: ^DeletePoint, state: ^EditorState) {
+    if cmd.path_was_deleted {
+        new_path := Path {
+            id = cmd.ref.path_id,
+            points = make([dynamic]Point),
+        }
+        append(&new_path.points, cmd.deleted_point)
+        append(&state.paths, new_path)
+    } else {
+        path, _ := find_path(state, cmd.ref.path_id)
+        inject_at(&path.points, cmd.index, cmd.deleted_point)
+    }
+}
+
 @(private="file")
 command_execute :: proc(cmd: Command, state: ^EditorState) {
     switch &c in cmd.data {
@@ -160,6 +197,8 @@ command_execute :: proc(cmd: Command, state: ^EditorState) {
         execute_toggle_close_path(&c, state)
     case MovePoint:
         execute_move_point(&c, state)
+    case DeletePoint:
+        execute_delete_point(&c, state)
     }
     state.should_rerender = true
 }
@@ -173,6 +212,8 @@ command_undo :: proc(cmd: Command, state: ^EditorState) {
         undo_toggle_close_path(&c, state)
     case MovePoint:
         undo_move_point(&c, state)
+    case DeletePoint:
+        undo_delete_point(&c, state)
     }
     state.should_rerender = true
 }

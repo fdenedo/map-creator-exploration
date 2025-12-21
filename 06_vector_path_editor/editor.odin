@@ -217,6 +217,26 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
             }
             history_execute(&es.history, cmd, es)
         }
+        if e.key_code == .DELETE || e.key_code == .BACKSPACE {
+            if selected, ok := es.selected_point.?; ok {
+                path, _ := find_path(es, selected.path_id)
+                point, point_index := find_point(path, selected.point_id)
+
+                cmd := Command {
+                    name = "Delete Point",
+                    description = "Delete a point",
+                    data = DeletePoint {
+                        ref = selected,
+                        index = point_index,
+                        deleted_point = point^,
+                        path_was_deleted = len(path.points) == 1,
+                    },
+                }
+                history_execute(&es.history, cmd, es)
+                es.selected_point = nil
+                is.point_hovered = nil
+            }
+        }
     }
 }
 
