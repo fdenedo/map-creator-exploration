@@ -77,21 +77,23 @@ resolve_special_point :: proc(es: ^EditorState, ref: PointRef) -> Maybe(SpecialP
 generate_path_geometry :: proc(es: ^EditorState, out: ^PathGeometry) {
     clear(&out.curve_lines)
 
+    curve_sample_tolerance := screen_to_world(0.5, es.camera, false).x // half-pixel tolerance
+
     for path in es.paths {
         for i in 1..<len(path.points) {
             start_point := get_effective_point(es, path.id, path.points[i-1].id)
             end_point := get_effective_point(es, path.id, path.points[i].id)
-            append(&out.curve_lines, ..generate_bezier(start_point, end_point)[:])
+            append(&out.curve_lines, ..generate_bezier(start_point, end_point, curve_sample_tolerance)[:])
         }
         if path.closed && len(path.points) > 0 {
             start_point := get_effective_point(es, path.id, path.points[len(path.points)-1].id)
             end_point := get_effective_point(es, path.id, path.points[0].id)
-            append(&out.curve_lines, ..generate_bezier(start_point, end_point)[:])
+            append(&out.curve_lines, ..generate_bezier(start_point, end_point, curve_sample_tolerance)[:])
         }
     }
 }
 
-generate_bezier :: proc(start: Point, end: Point) -> []WorldVec2 {
+generate_bezier :: proc(start: Point, end: Point, tolerance: f32) -> []WorldVec2 {
     p0 := ([2]f32)(start.pos)
     p1 := ([2]f32)(start.handle_out)
     p2 := ([2]f32)(end.handle_in)
@@ -107,17 +109,16 @@ generate_bezier :: proc(start: Point, end: Point) -> []WorldVec2 {
     for {
         if len(curve_samples) < 1 do break
 
-        // TODO: adaptive sampling should use a tolerance based on the pixel density
-        // as we still end up with straight lines in very curved sections, and as we calculate
-        // solely in world space, the samples aren't determined by zoom level.
-        // In other words, the threshold should be adaptive itself
+        // Satisfied TODO: now passing in tolerance, calculating using screen_to_world()
+        // TODO: can do something cheeky here if filling the polygon, and sample as a bunch of
+        // quadratic segments, and then use Loop-Blinn in the frag shader
         segment_control_points := pop(&curve_samples)
         if is_flat_enough(
             segment_control_points[0],
             segment_control_points[1],
             segment_control_points[2],
             segment_control_points[3],
-            0.001
+            tolerance
         ) {
             append(&bezier, WorldVec2(segment_control_points[0]), WorldVec2(segment_control_points[3]))
         } else {
