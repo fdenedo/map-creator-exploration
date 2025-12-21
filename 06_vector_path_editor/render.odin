@@ -232,8 +232,11 @@ render_frame :: proc(r: ^RenderState, camera: Camera, hovered_point: Maybe(Speci
     }
 
     // Draw selected point (white centre dot)
+    // Only update buffer if we haven't already updated it for hover
     if sp, ok := selected_point.?; ok {
-        point_renderer_update(&r.special_point, { sp.pos })
+        if _, hovered := hovered_point.?; !hovered {
+            point_renderer_update(&r.special_point, { sp.pos })
+        }
         point_renderer_draw(&r.special_point, &uniforms, sp.size * SELECTED_DOT_SCALE, WHITE)
     }
 
