@@ -184,24 +184,31 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
             }
         }
     case .MOUSE_DOWN:
-        if e.mouse_button != .LEFT do break
-        if hovered, ok := is.point_hovered.?; ok {
-            path, _ := find_path(es, hovered.path_id)
-            point, _ := find_point(path, hovered.point_id)
-            set_state(es, POTENTIAL_DRAG {
-                ref = hovered,
-                original_point = point^,
-                mouse_down_pos = es.mouse,
-            })
-        } else {
-            es.selected_point = nil
-            pos := screen_to_world(es.mouse, es.camera, true)
-            set_state(es, ADDING_POINT {
-                point = {
-                    handle_in   = pos,
-                    pos         = pos,
-                    handle_out  = pos,
-                }
+        if e.mouse_button == .LEFT {
+            if hovered, ok := is.point_hovered.?; ok {
+                path, _ := find_path(es, hovered.path_id)
+                point, _ := find_point(path, hovered.point_id)
+                set_state(es, POTENTIAL_DRAG {
+                    ref = hovered,
+                    original_point = point^,
+                    mouse_down_pos = es.mouse,
+                })
+            } else {
+                es.selected_point = nil
+                pos := screen_to_world(es.mouse, es.camera, true)
+                set_state(es, ADDING_POINT {
+                    point = {
+                        handle_in   = pos,
+                        pos         = pos,
+                        handle_out  = pos,
+                    }
+                })
+            }
+        }
+        if e.mouse_button == .MIDDLE {
+            set_state(es, PANNING {
+                camera_start = es.camera.pos,
+                mouse_last_pos = es.mouse,
             })
         }
     case .KEY_DOWN:
