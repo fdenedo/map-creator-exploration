@@ -356,6 +356,7 @@ handle_dragging_point :: proc(es: ^EditorState, is: ^DRAGGING_POINT, e: ^Event) 
             },
         }
         history_execute(&es.history, cmd, es)
+        es.selected_point = is.ref
         set_state(es, IDLE {})
 
     case .KEY_DOWN:
