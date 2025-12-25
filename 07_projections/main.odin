@@ -1,14 +1,17 @@
 package main
 
-import "core:encoding/json"
+import "base:runtime"
 import "core:path/filepath"
 import "core:log"
 import "core:os"
 
 DATA_DIR :: #directory // For the dir of the current file
 
+default_context: runtime.Context
+
 main :: proc() {
     context.logger = log.create_console_logger()
+    default_context = context
 
     full_path := filepath.join({DATA_DIR, "ne_110m_land.geojson"})
     data, ok := os.read_entire_file(full_path)
@@ -19,10 +22,6 @@ main :: proc() {
         return
     }
 
-    // Parse as Raw FeatureCollection
-    collection: Raw_FeatureCollection
-    json := json.unmarshal(data, &collection)
-
-    log.debug(collection)
-    log.debug("Error: ", json)
+    geojson, success_parse := parse_geojson(data)
+    log.debug(geojson)
 }
