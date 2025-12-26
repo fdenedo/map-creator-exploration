@@ -813,6 +813,135 @@ test_polygon_with_small_ring :: proc(t: ^testing.T) {
 }
 
 // ========================================
+// ERROR CATEGORY TESTS
+// ========================================
+
+@(test)
+test_error_invalid_json :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // Malformed JSON
+    json_data := `{"type": "Point", "coordinates": [100.0, 0.0`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Invalid_JSON, "Should return Invalid_JSON category for malformed JSON")
+}
+
+@(test)
+test_error_missing_field :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // Missing required 'type' field
+    json_data := `{"coordinates": [100.0, 0.0]}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Missing_Field, "Should return Missing_Field category")
+    testing.expect(t, err.path == "root.type", "Error path should be root.type")
+}
+
+@(test)
+test_error_missing_coordinates :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // Point missing coordinates field
+    json_data := `{"type": "Point"}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Missing_Field, "Should return Missing_Field category")
+    testing.expect(t, err.path == "Point.coordinates", "Error path should be Point.coordinates")
+}
+
+@(test)
+test_error_invalid_type_not_object :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // Root is not an object
+    json_data := `["type", "Point"]`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Invalid_Type, "Should return Invalid_Type category for array root")
+}
+
+@(test)
+test_error_invalid_type_field :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // 'type' field is not a string
+    json_data := `{"type": 123, "coordinates": [100.0, 0.0]}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Invalid_Type, "Should return Invalid_Type category for numeric type field")
+    testing.expect(t, err.path == "root.type", "Error path should be root.type")
+}
+
+@(test)
+test_error_invalid_value :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // Invalid position value (only 1 coordinate instead of 2+)
+    json_data := `{"type": "Point", "coordinates": [100.0]}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Invalid_Value, "Should return Invalid_Value category for invalid position")
+}
+
+@(test)
+test_error_constraint_violation_linestring :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // LineString with only 1 point (needs 2+)
+    json_data := `{"type": "LineString", "coordinates": [[100.0, 0.0]]}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Constraint_Violation, "Should return Constraint_Violation category")
+    testing.expect(t, err.path == "LineString.coordinates", "Error path should be LineString.coordinates")
+}
+
+@(test)
+test_error_constraint_violation_ring_size :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // LinearRing with < 4 positions
+    json_data := `{"type": "Polygon", "coordinates": [[[100.0, 0.0], [101.0, 1.0], [100.0, 0.0]]]}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Constraint_Violation, "Should return Constraint_Violation category")
+}
+
+@(test)
+test_error_constraint_violation_ring_not_closed :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // LinearRing that isn't closed
+    json_data := `{"type": "Polygon", "coordinates": [[[100.0, 0.0], [101.0, 0.0], [101.0, 1.0], [100.0, 1.0], [100.1, 0.1]]]}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Constraint_Violation, "Should return Constraint_Violation category")
+}
+
+@(test)
+test_error_unknown_type :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // Unknown geometry type
+    json_data := `{"type": "Triangle", "coordinates": [[100.0, 0.0]]}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Unknown_Type, "Should return Unknown_Type category")
+    testing.expect(t, err.path == "root.type", "Error path should be root.type")
+}
+
+// ========================================
 // REAL-WORLD EXAMPLE TESTS
 // ========================================
 
