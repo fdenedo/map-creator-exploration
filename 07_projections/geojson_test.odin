@@ -35,8 +35,8 @@ test_point_2d :: proc(t: ^testing.T) {
         "coordinates": [100.0, 0.0]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Point")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Point")
 
     geom, is_geom := result.(Geometry)
     testing.expect(t, is_geom, "Result is not a Geometry")
@@ -60,8 +60,8 @@ test_point_3d :: proc(t: ^testing.T) {
         "coordinates": [100.0, 0.0, 250.5]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Point with elevation")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Point with elevation")
 
     geom := result.(Geometry)
     point := geom.(Point)
@@ -83,8 +83,8 @@ test_point_with_bbox :: proc(t: ^testing.T) {
         "bbox": [100.0, 0.0, 100.0, 0.0]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Point with bbox")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Point with bbox")
 
     point := result.(Geometry).(Point)
     bbox, has_bbox := point.bbox.?
@@ -110,8 +110,8 @@ test_multipoint :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse MultiPoint")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse MultiPoint")
 
     mp := result.(Geometry).(MultiPoint)
     testing.expect_value(t, len(mp.coordinates), 2)
@@ -136,8 +136,8 @@ test_linestring :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse LineString")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse LineString")
 
     ls := result.(Geometry).(LineString)
     testing.expect_value(t, len(ls.coordinates), 2)
@@ -162,8 +162,8 @@ test_linestring_multiple_points :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse LineString with multiple points")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse LineString with multiple points")
 
     ls := result.(Geometry).(LineString)
     testing.expect_value(t, len(ls.coordinates), 4)
@@ -183,8 +183,8 @@ test_multilinestring :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse MultiLineString")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse MultiLineString")
 
     mls := result.(Geometry).(MultiLineString)
     testing.expect_value(t, len(mls.coordinates), 2)
@@ -214,8 +214,8 @@ test_polygon_simple :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse simple Polygon")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse simple Polygon")
 
     poly := result.(Geometry).(Polygon)
     testing.expect_value(t, len(poly.coordinates), 1) // Only exterior ring
@@ -254,8 +254,8 @@ test_polygon_with_hole :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Polygon with hole")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Polygon with hole")
 
     poly := result.(Geometry).(Polygon)
     testing.expect_value(t, len(poly.coordinates), 2) // Exterior + 1 hole
@@ -297,8 +297,8 @@ test_multipolygon :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse MultiPolygon")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse MultiPolygon")
 
     mp := result.(Geometry).(MultiPolygon)
     testing.expect_value(t, len(mp.coordinates), 2) // Two polygons
@@ -335,8 +335,8 @@ test_geometry_collection :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse GeometryCollection")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse GeometryCollection")
 
     gc := result.(Geometry).(GeometryCollection)
     testing.expect_value(t, len(gc.geometries), 2)
@@ -373,8 +373,8 @@ test_feature_with_point :: proc(t: ^testing.T) {
         }
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Feature")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Feature")
 
     feature := result.(Feature)
 
@@ -406,8 +406,8 @@ test_feature_with_string_id :: proc(t: ^testing.T) {
         "properties": {}
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Feature with string ID")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Feature with string ID")
 
     feature := result.(Feature)
     id, has_id := feature.id.?
@@ -434,8 +434,8 @@ test_feature_with_numeric_id :: proc(t: ^testing.T) {
         "properties": {}
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Feature with numeric ID")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Feature with numeric ID")
 
     feature := result.(Feature)
     id, has_id := feature.id.?
@@ -461,8 +461,8 @@ test_feature_without_id :: proc(t: ^testing.T) {
         "properties": {}
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Feature without ID")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Feature without ID")
 
     feature := result.(Feature)
     _, has_id := feature.id.?
@@ -483,8 +483,8 @@ test_feature_with_null_geometry :: proc(t: ^testing.T) {
         }
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Feature with null geometry")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Feature with null geometry")
 
     feature := result.(Feature)
     testing.expect(t, feature.properties != nil, "Properties should exist")
@@ -506,8 +506,8 @@ test_feature_with_bbox :: proc(t: ^testing.T) {
         "properties": {}
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse Feature with bbox")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse Feature with bbox")
 
     feature := result.(Feature)
     bbox, has_bbox := feature.bbox.?
@@ -558,8 +558,8 @@ test_feature_collection_simple :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse FeatureCollection")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse FeatureCollection")
 
     fc := result.(FeatureCollection)
     testing.expect_value(t, len(fc.features), 2)
@@ -584,8 +584,8 @@ test_feature_collection_empty :: proc(t: ^testing.T) {
         "features": []
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse empty FeatureCollection")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse empty FeatureCollection")
 
     fc := result.(FeatureCollection)
     testing.expect_value(t, len(fc.features), 0)
@@ -612,8 +612,8 @@ test_feature_collection_with_bbox :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse FeatureCollection with bbox")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse FeatureCollection with bbox")
 
     fc := result.(FeatureCollection)
     bbox, has_bbox := fc.bbox.?
@@ -639,8 +639,8 @@ test_bbox_2d :: proc(t: ^testing.T) {
         "bbox": [100.0, 0.0, 100.0, 0.0]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse with 2D bbox")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse with 2D bbox")
 
     point := result.(Geometry).(Point)
     bbox, has_bbox := point.bbox.?
@@ -669,8 +669,8 @@ test_bbox_3d :: proc(t: ^testing.T) {
         "bbox": [100.0, 0.0, 45.0, 100.0, 0.0, 55.0]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse with 3D bbox")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse with 3D bbox")
 
     point := result.(Geometry).(Point)
     bbox, has_bbox := point.bbox.?
@@ -696,8 +696,8 @@ test_invalid_json :: proc(t: ^testing.T) {
 
     json_data := `{type": "Point"}`
 
-    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, !ok, "Should fail on invalid JSON")
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category != .None, "Should fail on invalid JSON")
 }
 
 @(test)
@@ -709,8 +709,8 @@ test_missing_type_field :: proc(t: ^testing.T) {
         "coordinates": [100.0, 0.0]
     }`
 
-    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, !ok, "Should fail on missing type field")
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category != .None, "Should fail on missing type field")
 }
 
 @(test)
@@ -723,8 +723,8 @@ test_unknown_geometry_type :: proc(t: ^testing.T) {
         "coordinates": [100.0, 0.0]
     }`
 
-    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, !ok, "Should fail on unknown geometry type")
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category != .None, "Should fail on unknown geometry type")
 }
 
 @(test)
@@ -737,8 +737,8 @@ test_linestring_with_one_point :: proc(t: ^testing.T) {
         "coordinates": [[100.0, 0.0]]
     }`
 
-    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, !ok, "Should fail on LineString with only 1 point")
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category != .None, "Should fail on LineString with only 1 point")
 }
 
 @(test)
@@ -750,12 +750,12 @@ test_point_missing_coordinates :: proc(t: ^testing.T) {
         "type": "Point"
     }`
 
-    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, !ok, "Should fail on Point missing coordinates")
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category != .None, "Should fail on Point missing coordinates")
 }
 
 @(test)
-test_position_with_one_value :: proc(t: ^testing.T) {
+test_point_with_one_value :: proc(t: ^testing.T) {
     allocator, arena, buffer := test_arena_allocator()
     defer cleanup_test_arena(arena, buffer)
 
@@ -764,8 +764,8 @@ test_position_with_one_value :: proc(t: ^testing.T) {
         "coordinates": [100.0]
     }`
 
-    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, !ok, "Should fail on position with only 1 value")
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category != .Constraint_Violation, "Should fail on position with only 1 value")
 }
 
 @(test)
@@ -787,8 +787,8 @@ test_polygon_with_unclosed_ring :: proc(t: ^testing.T) {
         ]
     }`
 
-    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, !ok, "Should fail on unclosed ring")
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Constraint_Violation, "Should fail on unclosed ring")
 }
 
 @(test)
@@ -808,8 +808,8 @@ test_polygon_with_small_ring :: proc(t: ^testing.T) {
         ]
     }`
 
-    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, !ok, "Should fail on ring with < 4 positions")
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Constraint_Violation, "Should fail on ring with < 4 positions")
 }
 
 // ========================================
@@ -860,8 +860,8 @@ test_real_world_feature_collection :: proc(t: ^testing.T) {
         ]
     }`
 
-    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
-    testing.expect(t, ok, "Failed to parse real-world FeatureCollection")
+    result, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .None, "Failed to parse real-world FeatureCollection")
 
     fc := result.(FeatureCollection)
     testing.expect_value(t, len(fc.features), 2)

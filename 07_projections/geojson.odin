@@ -1,7 +1,6 @@
 package main
 
 import "core:encoding/json"
-import "core:log"
 
 // The structs and data objects defined in this file follow the RFC 7946 specification
 // for GeoJSON: https://datatracker.ietf.org/doc/html/rfc7946
@@ -140,10 +139,30 @@ GeometryCollection :: struct {
 Position :: [3]f64
 
 // ========================================
+// ERROR TYPES
+// ========================================
+
+Parse_Error_Category :: enum {
+    None,                    // Success - no error
+    Invalid_JSON,
+    Missing_Field,
+    Invalid_Type,
+    Invalid_Value,
+    Constraint_Violation,
+    Unknown_Type,
+}
+
+Parse_Error :: struct {
+    category: Parse_Error_Category,
+    message:  string,
+    path:     string,  // JSON path where the error occurred
+}
+
+// ========================================
 // PARSING FUNCTIONS
 // ========================================
 
-parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: GeoJSON, ok: bool) {
+parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: GeoJSON, err: Parse_Error) {
     // Final domain types use the provided allocator (caller owns this memory)
     // JSON parsing intermediates use temp_allocator (freed automatically)
     context.allocator = allocator
@@ -152,69 +171,93 @@ parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: 
 
     // Use temp_allocator for JSON parsing - these intermediates are only needed
     // during conversion to domain types, then can be discarded
-    if err := json.unmarshal(data, &raw_value, allocator = context.temp_allocator); err != nil {
-        log.errorf("Failed to unmarshal data as JSON: %v", err)
-        return GeoJSON {}, false
+    if json_err := json.unmarshal(data, &raw_value, allocator = context.temp_allocator); json_err != nil {
+        return GeoJSON {}, Parse_Error {
+            category = .Invalid_JSON,
+            message = "Failed to unmarshal data as JSON",
+            path ="root",
+        }
     }
     defer json.destroy_value(raw_value, context.temp_allocator)
 
     obj, obj_ok := raw_value.(json.Object)
     if !obj_ok {
-        log.errorf("Expected JSON Object at root, got %v", raw_value)
-        return GeoJSON {}, false
+        return GeoJSON {}, Parse_Error {
+            category = .Invalid_Type,
+            message = "Expected JSON Object at root",
+            path ="root",
+        }
     }
 
     type_value, type_ok := obj["type"]
     if !type_ok {
-        log.error("Missing 'type' field in GeoJSON root object")
-        return GeoJSON {}, false
+        return GeoJSON {}, Parse_Error {
+            category = .Missing_Field,
+            message = "Missing 'type' field in GeoJSON root object",
+            path ="root.type",
+        }
     }
 
     type_str, type_str_ok := type_value.(json.String)
     if !type_str_ok {
-        log.errorf("Expected 'type' to be a string, got %v", type_value)
-        return GeoJSON {}, false
+        return GeoJSON {}, Parse_Error {
+            category = .Invalid_Type,
+            message = "Expected 'type' to be a string",
+            path ="root.type",
+        }
     }
 
     switch type_str {
     case "FeatureCollection":
         fc: Raw_FeatureCollection
-        if err := json.unmarshal(data, &fc, allocator = context.temp_allocator); err != nil {
-            log.errorf("Failed to unmarshal FeatureCollection: %v", err)
-            return GeoJSON {}, false
+        if json_err := json.unmarshal(data, &fc, allocator = context.temp_allocator); json_err != nil {
+            return GeoJSON {}, Parse_Error {
+                category = .Invalid_JSON,
+                message = "Failed to unmarshal FeatureCollection",
+                path ="root",
+            }
         }
         return raw_to_feature_collection(fc)
 
     case "Feature":
         f: Raw_Feature
-        if err := json.unmarshal(data, &f, allocator = context.temp_allocator); err != nil {
-            log.errorf("Failed to unmarshal Feature: %v", err)
-            return GeoJSON {}, false
+        if json_err := json.unmarshal(data, &f, allocator = context.temp_allocator); json_err != nil {
+            return GeoJSON {}, Parse_Error {
+                category = .Invalid_JSON,
+                message = "Failed to unmarshal Feature",
+                path ="root",
+            }
         }
         return raw_to_feature(f)
 
     case "Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon", "GeometryCollection":
         g: Raw_Geometry
-        if err := json.unmarshal(data, &g, allocator = context.temp_allocator); err != nil {
-            log.errorf("Failed to unmarshal Geometry: %v", err)
-            return GeoJSON {}, false
+        if json_err := json.unmarshal(data, &g, allocator = context.temp_allocator); json_err != nil {
+            return GeoJSON {}, Parse_Error {
+                category = .Invalid_JSON,
+                message = "Failed to unmarshal Geometry",
+                path ="root",
+            }
         }
         return raw_to_geometry(g)
 
     case:
-        log.errorf("Unknown GeoJSON type: %s", type_str)
-        return GeoJSON {}, false
+        return GeoJSON {}, Parse_Error {
+            category = .Unknown_Type,
+            message = "Unknown GeoJSON type",
+            path ="root.type",
+        }
     }
 }
 
-raw_to_feature_collection :: proc(raw: Raw_FeatureCollection) -> (result: FeatureCollection, ok: bool) {
+raw_to_feature_collection :: proc(raw: Raw_FeatureCollection) -> (result: FeatureCollection, err: Parse_Error) {
     processed_features := make([dynamic]Feature)
     defer delete(processed_features)
 
     for feature in raw.features {
-        processed, processed_success := raw_to_feature(feature)
-        if !processed_success {
-            log.errorf("Failed to process as Feature: %v", feature)
+        processed, feature_err := raw_to_feature(feature)
+        if feature_err.category != .None {
+            // Skip invalid features and continue processing (partial success)
             continue
         }
         append(&processed_features, processed)
@@ -223,10 +266,10 @@ raw_to_feature_collection :: proc(raw: Raw_FeatureCollection) -> (result: Featur
     return FeatureCollection {
         features = processed_features[:],
         bbox = parse_bbox(raw.bbox),
-    }, true
+    }, Parse_Error{category = .None}
 }
 
-raw_to_feature :: proc(raw: Raw_Feature) -> (result: Feature, ok: bool) {
+raw_to_feature :: proc(raw: Raw_Feature) -> (result: Feature, err: Parse_Error) {
     feature := Feature {
         id = parse_feature_id(raw.id),
         properties = raw.properties.? or_else nil,
@@ -235,123 +278,162 @@ raw_to_feature :: proc(raw: Raw_Feature) -> (result: Feature, ok: bool) {
 
     // Geometry can be null for unlocated features
     if raw_geom, has_geom := raw.geometry.?; has_geom {
-        geom, geom_ok := raw_to_geometry(raw_geom)
-        if !geom_ok {
-            log.errorf("Failed to process geometry of Feature")
-            return Feature {}, false
+        geom, geom_err := raw_to_geometry(raw_geom)
+        if geom_err.category != .None {
+            geom_err.path ="Feature.geometry"
+            return Feature {}, geom_err
         }
         feature.geometry = geom
     }
 
-    return feature, true
+    return feature, Parse_Error { category = .None }
 }
 
-raw_to_geometry :: proc(raw: Raw_Geometry) -> (result: Geometry, ok: bool) {
+raw_to_geometry :: proc(raw: Raw_Geometry) -> (result: Geometry, err: Parse_Error) {
     bbox := parse_bbox(raw.bbox)
 
     switch raw.type {
     case "Point":
         coords, coords_ok := raw.coordinates.?
         if !coords_ok {
-            log.error("Point geometry missing coordinates")
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Missing_Field,
+                message = "Point geometry missing coordinates field",
+                path ="Point.coordinates",
+            }
         }
         pos, pos_ok := parse_position(coords)
         if !pos_ok {
-            log.error("Failed to parse Point coordinates")
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Invalid_Value,
+                message = "Failed to parse Point coordinates",
+                path ="Point.coordinates",
+            }
         }
-        return Point{coordinates = pos, bbox = bbox}, true
+        return Point{ coordinates = pos, bbox = bbox }, Parse_Error { category = .None }
 
     case "MultiPoint":
         coords, coords_ok := raw.coordinates.?
         if !coords_ok {
-            log.error("MultiPoint geometry missing coordinates")
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Missing_Field,
+                message = "MultiPoint geometry missing coordinates field",
+                path ="MultiPoint.coordinates",
+            }
         }
         positions, positions_ok := parse_position_array(coords)
         if !positions_ok {
-            log.error("Failed to parse MultiPoint coordinates")
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Invalid_Value,
+                message = "Failed to parse MultiPoint coordinates",
+                path ="MultiPoint.coordinates",
+            }
         }
-        return MultiPoint{coordinates = positions, bbox = bbox}, true
+        return MultiPoint { coordinates = positions, bbox = bbox }, Parse_Error { category = .None }
 
     case "LineString":
         coords, coords_ok := raw.coordinates.?
         if !coords_ok {
-            log.error("LineString geometry missing coordinates")
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Missing_Field,
+                message = "LineString geometry missing coordinates field",
+                path ="LineString.coordinates",
+            }
         }
         positions, positions_ok := parse_position_array(coords)
         if !positions_ok {
-            log.error("Failed to parse LineString coordinates")
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Invalid_Value,
+                message = "Failed to parse LineString coordinates",
+                path ="LineString.coordinates",
+            }
         }
         if len(positions) < 2 {
-            log.errorf("LineString must have at least 2 positions, got %d", len(positions))
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Constraint_Violation,
+                message = "LineString must have at least 2 positions",
+                path ="LineString.coordinates",
+            }
         }
-        return LineString{coordinates = positions, bbox = bbox}, true
+        return LineString { coordinates = positions, bbox = bbox }, Parse_Error { category = .None }
 
     case "MultiLineString":
         coords, coords_ok := raw.coordinates.?
         if !coords_ok {
-            log.error("MultiLineString geometry missing coordinates")
-            return Geometry {}, false
+            return Geometry{}, Parse_Error{
+                category = .Missing_Field,
+                message = "MultiLineString geometry missing coordinates field",
+                path ="MultiLineString.coordinates",
+            }
         }
-        lines, lines_ok := parse_line_array(coords)
-        if !lines_ok {
-            log.error("Failed to parse MultiLineString coordinates")
-            return Geometry {}, false
+        lines, line_err := parse_line_array(coords)
+        if line_err.category != .None {
+            line_err.path ="MultiLineString.coordinates"
+            return Geometry{}, line_err
         }
-        return MultiLineString{coordinates = lines, bbox = bbox}, true
+        return MultiLineString { coordinates = lines, bbox = bbox }, Parse_Error { category = .None }
 
     case "Polygon":
         coords, coords_ok := raw.coordinates.?
         if !coords_ok {
-            log.error("Polygon geometry missing coordinates")
-            return Geometry {}, false
+            return Geometry{}, Parse_Error{
+                category = .Missing_Field,
+                message = "Polygon geometry missing coordinates field",
+                path ="Polygon.coordinates",
+            }
         }
-        rings, rings_ok := parse_ring_array(coords)
-        if !rings_ok {
-            log.error("Failed to parse Polygon coordinates")
-            return Geometry {}, false
+        rings, ring_err := parse_ring_array(coords)
+        if ring_err.category != .None {
+            ring_err.path ="Polygon.coordinates"
+            return Geometry {}, ring_err
         }
-        return Polygon { coordinates = rings, bbox = bbox }, true
+        return Polygon { coordinates = rings, bbox = bbox }, Parse_Error { category = .None }
 
     case "MultiPolygon":
         coords, coords_ok := raw.coordinates.?
         if !coords_ok {
-            log.error("MultiPolygon geometry missing coordinates")
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Missing_Field,
+                message = "MultiPolygon geometry missing coordinates field",
+                path ="MultiPolygon.coordinates",
+            }
         }
-        polygons, polygons_ok := parse_polygon_array(coords)
-        if !polygons_ok {
-            log.error("Failed to parse MultiPolygon coordinates")
-            return Geometry {}, false
+        polygons, poly_err := parse_polygon_array(coords)
+        if poly_err.category != .None {
+            poly_err.path ="MultiPolygon.coordinates"
+            return Geometry {}, poly_err
         }
-        return MultiPolygon { coordinates = polygons, bbox = bbox }, true
+        return MultiPolygon { coordinates = polygons, bbox = bbox }, Parse_Error { category = .None }
 
     case "GeometryCollection":
         raw_geoms, geoms_ok := raw.geometries.?
         if !geoms_ok {
-            log.error("GeometryCollection missing geometries array")
-            return Geometry {}, false
+            return Geometry {}, Parse_Error {
+                category = .Missing_Field,
+                message = "GeometryCollection missing geometries array",
+                path ="GeometryCollection.geometries",
+            }
         }
         geometries := make([]Geometry, len(raw_geoms))
         for raw_geom, i in raw_geoms {
-            geom, geom_ok := raw_to_geometry(raw_geom)
-            if !geom_ok {
-                log.errorf("Failed to parse geometry at index %d in GeometryCollection", i)
-                return Geometry {}, false
+            geom, geom_err := raw_to_geometry(raw_geom)
+            if geom_err.category != .None {
+                return Geometry {}, Parse_Error {
+                    category = .Invalid_Value,
+                    message = "Failed to parse geometry in GeometryCollection",
+                    path ="GeometryCollection.geometries",
+                }
             }
             geometries[i] = geom
         }
-        return GeometryCollection { geometries = geometries, bbox = bbox }, true
+        return GeometryCollection { geometries = geometries, bbox = bbox }, Parse_Error { category = .None }
 
     case:
-        log.errorf("Unknown geometry type: %s", raw.type)
-        return Geometry {}, false
+        return Geometry {}, Parse_Error {
+            category = .Unknown_Type,
+            message = "Unknown geometry type",
+            path ="type",
+        }
     }
 }
 
@@ -432,52 +514,86 @@ parse_position_array :: proc(val: json.Value) -> ([]Position, bool) {
     return positions, true
 }
 
-parse_line_array :: proc(val: json.Value) -> ([][]Position, bool) {
+parse_line_array :: proc(val: json.Value) -> ([][]Position, Parse_Error) {
     arr, arr_ok := val.(json.Array)
     if !arr_ok {
-        return nil, false
+        return nil, Parse_Error {
+            category = .Invalid_Type,
+            message = "Expected array for LineString coordinates",
+        }
     }
     lines := make([][]Position, len(arr))
     for elem, i in arr {
         line, line_ok := parse_position_array(elem)
         if !line_ok {
-            return nil, false
+            return nil, Parse_Error {
+                category = .Invalid_Value,
+                message = "Failed to parse position array",
+            }
         }
         lines[i] = line
     }
-    return lines, true
+    return lines, Parse_Error { category = .None }
 }
 
-parse_ring_array :: proc(val: json.Value) -> ([]LinearRing, bool) {
+parse_ring_array :: proc(val: json.Value) -> ([]LinearRing, Parse_Error) {
     arr, arr_ok := val.(json.Array)
     if !arr_ok {
-        return nil, false
+        return nil, Parse_Error{
+            category = .Invalid_Type,
+            message = "Expected array for LinearRing coordinates",
+        }
     }
     rings := make([]LinearRing, len(arr))
     for elem, i in arr {
         positions, pos_ok := parse_position_array(elem)
         if !pos_ok {
-            return nil, false
+            return nil, Parse_Error {
+                category = .Invalid_Value,
+                message = "Failed to parse position array",
+            }
         }
+
+        // Validate LinearRing constraints per RFC 7946
+        if len(positions) < 4 {
+            return nil, Parse_Error {
+                category = .Constraint_Violation,
+                message = "LinearRing must have at least 4 positions",
+            }
+        }
+
+        // Check if ring is closed (first == last)
+        first := positions[0]
+        last := positions[len(positions)-1]
+        if first[0] != last[0] || first[1] != last[1] || first[2] != last[2] {
+            return nil, Parse_Error {
+                category = .Constraint_Violation,
+                message = "LinearRing must be closed (first and last positions must be identical)",
+            }
+        }
+
         rings[i] = LinearRing(positions)
     }
-    return rings, true
+    return rings, Parse_Error { category = .None }
 }
 
-parse_polygon_array :: proc(val: json.Value) -> ([][]LinearRing, bool) {
+parse_polygon_array :: proc(val: json.Value) -> ([][]LinearRing, Parse_Error) {
     arr, arr_ok := val.(json.Array)
     if !arr_ok {
-        return nil, false
+        return nil, Parse_Error {
+            category = .Invalid_Type,
+            message = "Expected array for Polygon coordinates",
+        }
     }
     polygons := make([][]LinearRing, len(arr))
     for elem, i in arr {
-        rings, rings_ok := parse_ring_array(elem)
-        if !rings_ok {
-            return nil, false
+        rings, err := parse_ring_array(elem)
+        if err.category != .None {
+            return nil, err
         }
         polygons[i] = rings
     }
-    return polygons, true
+    return polygons, Parse_Error { category = .None }
 }
 
 json_to_f64 :: proc(val: json.Value) -> (f64, bool) {
