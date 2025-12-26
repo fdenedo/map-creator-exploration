@@ -1,8 +1,25 @@
 package main
 
 import "core:encoding/json"
+import "core:mem"
 import "core:testing"
 import "core:log"
+
+// Helper to set up arena allocator for tests
+// This ensures domain types are cleaned up after each test
+@(private="file")
+test_arena_allocator :: proc() -> (mem.Allocator, ^mem.Arena, []byte) {
+    buffer := make([]byte, 64 * 1024) // 64KB
+    arena := new(mem.Arena)
+    mem.arena_init(arena, buffer)
+    return mem.arena_allocator(arena), arena, buffer
+}
+
+@(private="file")
+cleanup_test_arena :: proc(arena: ^mem.Arena, buffer: []byte) {
+    free(arena)
+    delete(buffer)
+}
 
 // ========================================
 // GEOMETRY TESTS
@@ -10,13 +27,16 @@ import "core:log"
 
 @(test)
 test_point_2d :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Point with 2D coordinates (longitude, latitude)
     json_data := `{
         "type": "Point",
         "coordinates": [100.0, 0.0]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Point")
     
     geom, is_geom := result.(Geometry)
@@ -32,13 +52,16 @@ test_point_2d :: proc(t: ^testing.T) {
 
 @(test)
 test_point_3d :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Point with 3D coordinates (longitude, latitude, elevation)
     json_data := `{
         "type": "Point",
         "coordinates": [100.0, 0.0, 250.5]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Point with elevation")
     
     geom := result.(Geometry)
@@ -51,6 +74,9 @@ test_point_3d :: proc(t: ^testing.T) {
 
 @(test)
 test_point_with_bbox :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Point with bounding box
     json_data := `{
         "type": "Point",
@@ -58,7 +84,7 @@ test_point_with_bbox :: proc(t: ^testing.T) {
         "bbox": [100.0, 0.0, 100.0, 0.0]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Point with bbox")
     
     point := result.(Geometry).(Point)
@@ -73,6 +99,9 @@ test_point_with_bbox :: proc(t: ^testing.T) {
 
 @(test)
 test_multipoint :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // MultiPoint with multiple positions
     json_data := `{
         "type": "MultiPoint",
@@ -82,7 +111,7 @@ test_multipoint :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse MultiPoint")
     
     mp := result.(Geometry).(MultiPoint)
@@ -96,6 +125,9 @@ test_multipoint :: proc(t: ^testing.T) {
 
 @(test)
 test_linestring :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // LineString with 2 positions (minimum)
     json_data := `{
         "type": "LineString",
@@ -105,7 +137,7 @@ test_linestring :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse LineString")
     
     ls := result.(Geometry).(LineString)
@@ -117,6 +149,9 @@ test_linestring :: proc(t: ^testing.T) {
 
 @(test)
 test_linestring_multiple_points :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // LineString with multiple points
     json_data := `{
         "type": "LineString",
@@ -128,7 +163,7 @@ test_linestring_multiple_points :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse LineString with multiple points")
     
     ls := result.(Geometry).(LineString)
@@ -137,6 +172,9 @@ test_linestring_multiple_points :: proc(t: ^testing.T) {
 
 @(test)
 test_multilinestring :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // MultiLineString with two line strings
     json_data := `{
         "type": "MultiLineString",
@@ -146,7 +184,7 @@ test_multilinestring :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse MultiLineString")
     
     mls := result.(Geometry).(MultiLineString)
@@ -160,6 +198,9 @@ test_multilinestring :: proc(t: ^testing.T) {
 
 @(test)
 test_polygon_simple :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Polygon with exterior ring only (no holes)
     json_data := `{
         "type": "Polygon",
@@ -174,7 +215,7 @@ test_polygon_simple :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse simple Polygon")
     
     poly := result.(Geometry).(Polygon)
@@ -190,6 +231,9 @@ test_polygon_simple :: proc(t: ^testing.T) {
 
 @(test)
 test_polygon_with_hole :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Polygon with exterior ring and one interior ring (hole)
     json_data := `{
         "type": "Polygon",
@@ -211,7 +255,7 @@ test_polygon_with_hole :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Polygon with hole")
     
     poly := result.(Geometry).(Polygon)
@@ -226,6 +270,9 @@ test_polygon_with_hole :: proc(t: ^testing.T) {
 
 @(test)
 test_multipolygon :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // MultiPolygon with two polygons
     json_data := `{
         "type": "MultiPolygon",
@@ -251,7 +298,7 @@ test_multipolygon :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse MultiPolygon")
     
     mp := result.(Geometry).(MultiPolygon)
@@ -268,6 +315,9 @@ test_multipolygon :: proc(t: ^testing.T) {
 
 @(test)
 test_geometry_collection :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // GeometryCollection with Point and LineString
     json_data := `{
         "type": "GeometryCollection",
@@ -286,7 +336,7 @@ test_geometry_collection :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse GeometryCollection")
     
     gc := result.(Geometry).(GeometryCollection)
@@ -309,6 +359,9 @@ test_geometry_collection :: proc(t: ^testing.T) {
 
 @(test)
 test_feature_with_point :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Feature with a Point geometry and properties
     json_data := `{
         "type": "Feature",
@@ -321,7 +374,7 @@ test_feature_with_point :: proc(t: ^testing.T) {
         }
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Feature")
     
     feature := result.(Feature)
@@ -340,6 +393,9 @@ test_feature_with_point :: proc(t: ^testing.T) {
 
 @(test)
 test_feature_with_string_id :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Feature with string ID
     json_data := `{
         "type": "Feature",
@@ -351,7 +407,7 @@ test_feature_with_string_id :: proc(t: ^testing.T) {
         "properties": {}
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Feature with string ID")
     
     feature := result.(Feature)
@@ -365,6 +421,9 @@ test_feature_with_string_id :: proc(t: ^testing.T) {
 
 @(test)
 test_feature_with_numeric_id :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Feature with numeric ID
     json_data := `{
         "type": "Feature",
@@ -376,7 +435,7 @@ test_feature_with_numeric_id :: proc(t: ^testing.T) {
         "properties": {}
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Feature with numeric ID")
     
     feature := result.(Feature)
@@ -390,6 +449,9 @@ test_feature_with_numeric_id :: proc(t: ^testing.T) {
 
 @(test)
 test_feature_without_id :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Feature without ID (optional per RFC 7946)
     json_data := `{
         "type": "Feature",
@@ -400,7 +462,7 @@ test_feature_without_id :: proc(t: ^testing.T) {
         "properties": {}
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Feature without ID")
     
     feature := result.(Feature)
@@ -410,6 +472,9 @@ test_feature_without_id :: proc(t: ^testing.T) {
 
 @(test)
 test_feature_with_null_geometry :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Feature with null geometry (unlocated feature per RFC 7946)
     json_data := `{
         "type": "Feature",
@@ -419,19 +484,18 @@ test_feature_with_null_geometry :: proc(t: ^testing.T) {
         }
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Feature with null geometry")
     
     feature := result.(Feature)
-    
-    // Geometry should be the zero value of the union
-    // In Odin, we need to check if any variant is set
-    // For now, we just verify the feature parsed successfully
     testing.expect(t, feature.properties != nil, "Properties should exist")
 }
 
 @(test)
 test_feature_with_bbox :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Feature with bounding box
     json_data := `{
         "type": "Feature",
@@ -443,7 +507,7 @@ test_feature_with_bbox :: proc(t: ^testing.T) {
         "properties": {}
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse Feature with bbox")
     
     feature := result.(Feature)
@@ -462,6 +526,9 @@ test_feature_with_bbox :: proc(t: ^testing.T) {
 
 @(test)
 test_feature_collection_simple :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // FeatureCollection with two features
     json_data := `{
         "type": "FeatureCollection",
@@ -492,7 +559,7 @@ test_feature_collection_simple :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse FeatureCollection")
     
     fc := result.(FeatureCollection)
@@ -509,13 +576,16 @@ test_feature_collection_simple :: proc(t: ^testing.T) {
 
 @(test)
 test_feature_collection_empty :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // FeatureCollection with no features
     json_data := `{
         "type": "FeatureCollection",
         "features": []
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse empty FeatureCollection")
     
     fc := result.(FeatureCollection)
@@ -524,6 +594,9 @@ test_feature_collection_empty :: proc(t: ^testing.T) {
 
 @(test)
 test_feature_collection_with_bbox :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // FeatureCollection with bounding box
     json_data := `{
         "type": "FeatureCollection",
@@ -540,7 +613,7 @@ test_feature_collection_with_bbox :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse FeatureCollection with bbox")
     
     fc := result.(FeatureCollection)
@@ -557,6 +630,9 @@ test_feature_collection_with_bbox :: proc(t: ^testing.T) {
 
 @(test)
 test_bbox_2d :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // 2D bounding box (4 values)
     json_data := `{
         "type": "Point",
@@ -564,7 +640,7 @@ test_bbox_2d :: proc(t: ^testing.T) {
         "bbox": [100.0, 0.0, 100.0, 0.0]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse with 2D bbox")
     
     point := result.(Geometry).(Point)
@@ -584,6 +660,9 @@ test_bbox_2d :: proc(t: ^testing.T) {
 
 @(test)
 test_bbox_3d :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // 3D bounding box (6 values)
     json_data := `{
         "type": "Point",
@@ -591,7 +670,7 @@ test_bbox_3d :: proc(t: ^testing.T) {
         "bbox": [100.0, 0.0, 45.0, 100.0, 0.0, 55.0]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse with 3D bbox")
     
     point := result.(Geometry).(Point)
@@ -613,20 +692,26 @@ test_bbox_3d :: proc(t: ^testing.T) {
 
 @(test)
 test_invalid_json :: proc(t: ^testing.T) {
-    // Invalid JSON syntax - suppress error logging for negative test
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
+    // Suppress error logging for negative test
     old_logger := context.logger
     context.logger = log.nil_logger()
     defer context.logger = old_logger
     
     json_data := `{type": "Point"}`
     
-    _, ok := parse_geojson(transmute([]byte)json_data)
+    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, !ok, "Should fail on invalid JSON")
 }
 
 @(test)
 test_missing_type_field :: proc(t: ^testing.T) {
-    // Missing "type" field - suppress error logging for negative test
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
+    // Suppress error logging for negative test
     old_logger := context.logger
     context.logger = log.nil_logger()
     defer context.logger = old_logger
@@ -635,13 +720,16 @@ test_missing_type_field :: proc(t: ^testing.T) {
         "coordinates": [100.0, 0.0]
     }`
     
-    _, ok := parse_geojson(transmute([]byte)json_data)
+    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, !ok, "Should fail on missing type field")
 }
 
 @(test)
 test_unknown_geometry_type :: proc(t: ^testing.T) {
-    // Unknown geometry type - suppress error logging for negative test
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
+    // Suppress error logging for negative test
     old_logger := context.logger
     context.logger = log.nil_logger()
     defer context.logger = old_logger
@@ -651,13 +739,16 @@ test_unknown_geometry_type :: proc(t: ^testing.T) {
         "coordinates": [100.0, 0.0]
     }`
     
-    _, ok := parse_geojson(transmute([]byte)json_data)
+    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, !ok, "Should fail on unknown geometry type")
 }
 
 @(test)
 test_linestring_with_one_point :: proc(t: ^testing.T) {
-    // LineString must have at least 2 positions - suppress error logging for negative test
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
+    // Suppress error logging for negative test
     old_logger := context.logger
     context.logger = log.nil_logger()
     defer context.logger = old_logger
@@ -667,13 +758,16 @@ test_linestring_with_one_point :: proc(t: ^testing.T) {
         "coordinates": [[100.0, 0.0]]
     }`
     
-    _, ok := parse_geojson(transmute([]byte)json_data)
+    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, !ok, "Should fail on LineString with only 1 point")
 }
 
 @(test)
 test_point_missing_coordinates :: proc(t: ^testing.T) {
-    // Point without coordinates - suppress error logging for negative test
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
+    // Suppress error logging for negative test
     old_logger := context.logger
     context.logger = log.nil_logger()
     defer context.logger = old_logger
@@ -682,13 +776,16 @@ test_point_missing_coordinates :: proc(t: ^testing.T) {
         "type": "Point"
     }`
     
-    _, ok := parse_geojson(transmute([]byte)json_data)
+    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, !ok, "Should fail on Point missing coordinates")
 }
 
 @(test)
 test_position_with_one_value :: proc(t: ^testing.T) {
-    // Position must have at least 2 values (lon, lat) - suppress error logging for negative test
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
+    // Suppress error logging for negative test
     old_logger := context.logger
     context.logger = log.nil_logger()
     defer context.logger = old_logger
@@ -698,7 +795,7 @@ test_position_with_one_value :: proc(t: ^testing.T) {
         "coordinates": [100.0]
     }`
     
-    _, ok := parse_geojson(transmute([]byte)json_data)
+    _, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, !ok, "Should fail on position with only 1 value")
 }
 
@@ -708,6 +805,9 @@ test_position_with_one_value :: proc(t: ^testing.T) {
 
 @(test)
 test_real_world_feature_collection :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+    
     // Realistic FeatureCollection with mixed geometry types
     json_data := `{
         "type": "FeatureCollection",
@@ -747,7 +847,7 @@ test_real_world_feature_collection :: proc(t: ^testing.T) {
         ]
     }`
     
-    result, ok := parse_geojson(transmute([]byte)json_data)
+    result, ok := parse_geojson(transmute([]byte)json_data, allocator)
     testing.expect(t, ok, "Failed to parse real-world FeatureCollection")
     
     fc := result.(FeatureCollection)

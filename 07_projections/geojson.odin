@@ -144,14 +144,19 @@ Position :: [3]f64
 // ========================================
 
 parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: GeoJSON, ok: bool) {
+    // Final domain types use the provided allocator (caller owns this memory)
+    // JSON parsing intermediates use temp_allocator (freed automatically)
     context.allocator = allocator
 
     raw_value: json.Value
 
-    if err := json.unmarshal(data, &raw_value, allocator = allocator); err != nil {
+    // Use temp_allocator for JSON parsing - these intermediates are only needed
+    // during conversion to domain types, then can be discarded
+    if err := json.unmarshal(data, &raw_value, allocator = context.temp_allocator); err != nil {
         log.errorf("Failed to unmarshal data as JSON: %v", err)
         return GeoJSON {}, false
     }
+    defer json.destroy_value(raw_value, context.temp_allocator)
 
     obj, obj_ok := raw_value.(json.Object)
     if !obj_ok {
@@ -174,7 +179,7 @@ parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: 
     switch type_str {
     case "FeatureCollection":
         fc: Raw_FeatureCollection
-        if err := json.unmarshal(data, &fc, allocator = allocator); err != nil {
+        if err := json.unmarshal(data, &fc, allocator = context.temp_allocator); err != nil {
             log.errorf("Failed to unmarshal FeatureCollection: %v", err)
             return GeoJSON {}, false
         }
@@ -182,7 +187,7 @@ parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: 
 
     case "Feature":
         f: Raw_Feature
-        if err := json.unmarshal(data, &f, allocator = allocator); err != nil {
+        if err := json.unmarshal(data, &f, allocator = context.temp_allocator); err != nil {
             log.errorf("Failed to unmarshal Feature: %v", err)
             return GeoJSON {}, false
         }
@@ -190,7 +195,7 @@ parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: 
 
     case "Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon", "GeometryCollection":
         g: Raw_Geometry
-        if err := json.unmarshal(data, &g, allocator = allocator); err != nil {
+        if err := json.unmarshal(data, &g, allocator = context.temp_allocator); err != nil {
             log.errorf("Failed to unmarshal Geometry: %v", err)
             return GeoJSON {}, false
         }

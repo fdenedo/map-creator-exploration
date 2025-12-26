@@ -1,6 +1,7 @@
 package main
 
 import "base:runtime"
+import "core:mem/virtual"
 import "core:path/filepath"
 import "core:log"
 import "core:os"
@@ -22,6 +23,24 @@ main :: proc() {
         return
     }
 
+    // Set up a larger temp allocator for JSON parsing intermediates
+    // The default temp_allocator is small; large GeoJSON files need more space
+    temp_arena: virtual.Arena
+    if virtual.arena_init_growing(&temp_arena) != .None {
+        log.error("Failed to initialize temp arena")
+        return
+    }
+    defer virtual.arena_destroy(&temp_arena)
+    context.temp_allocator = virtual.arena_allocator(&temp_arena)
+
+    // parse_geojson uses temp_allocator internally for JSON intermediate processing
+    // Final domain types use context.allocator (default heap allocator)
     geojson, success_parse := parse_geojson(data)
-    log.debug(geojson)
+    if !success_parse {
+        log.error("Failed to parse GeoJSON")
+        return
+    }
+
+    fc := geojson.(FeatureCollection)
+    log.infof("Parsed FeatureCollection with %d features", len(fc.features))
 }
