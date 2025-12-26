@@ -941,6 +941,30 @@ test_error_unknown_type :: proc(t: ^testing.T) {
     testing.expect(t, err.path == "root.type", "Error path should be root.type")
 }
 
+@(test)
+test_error_polygon_no_rings :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // Polygon with empty coordinates array
+    json_data := `{"type": "Polygon", "coordinates": []}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Constraint_Violation, "Should fail on Polygon with no rings")
+}
+
+@(test)
+test_error_multilinestring_short_line :: proc(t: ^testing.T) {
+    allocator, arena, buffer := test_arena_allocator()
+    defer cleanup_test_arena(arena, buffer)
+
+    // MultiLineString with a line that has only 1 position
+    json_data := `{"type": "MultiLineString", "coordinates": [[[100.0, 0.0]]]}`
+
+    _, err := parse_geojson(transmute([]byte)json_data, allocator)
+    testing.expect(t, err.category == .Constraint_Violation, "Should fail on MultiLineString with line < 2 positions")
+}
+
 // ========================================
 // REAL-WORLD EXAMPLE TESTS
 // ========================================

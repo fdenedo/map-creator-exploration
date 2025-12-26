@@ -387,6 +387,13 @@ raw_to_geometry :: proc(raw: Raw_Geometry) -> (result: Geometry, err: Parse_Erro
             ring_err.path ="Polygon.coordinates"
             return Geometry {}, ring_err
         }
+        if len(rings) == 0 {
+            return Geometry {}, Parse_Error {
+                category = .Constraint_Violation,
+                message = "Polygon must have at least one ring",
+                path ="Polygon.coordinates",
+            }
+        }
         return Polygon { coordinates = rings, bbox = bbox }, Parse_Error { category = .None }
 
     case "MultiPolygon":
@@ -529,6 +536,13 @@ parse_line_array :: proc(val: json.Value) -> ([][]Position, Parse_Error) {
             return nil, Parse_Error {
                 category = .Invalid_Value,
                 message = "Failed to parse position array",
+            }
+        }
+        // Each LineString must have at least 2 positions per RFC 7946
+        if len(line) < 2 {
+            return nil, Parse_Error {
+                category = .Constraint_Violation,
+                message = "LineString must have at least 2 positions",
             }
         }
         lines[i] = line
