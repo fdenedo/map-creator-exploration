@@ -315,9 +315,9 @@ raw_to_geometry :: proc(raw: Raw_Geometry) -> (result: Geometry, ok: bool) {
         rings, rings_ok := parse_ring_array(coords)
         if !rings_ok {
             log.error("Failed to parse Polygon coordinates")
-            return Geometry{}, false
+            return Geometry {}, false
         }
-        return Polygon{coordinates = rings, bbox = bbox}, true
+        return Polygon { coordinates = rings, bbox = bbox }, true
 
     case "MultiPolygon":
         coords, coords_ok := raw.coordinates.?
@@ -330,7 +330,7 @@ raw_to_geometry :: proc(raw: Raw_Geometry) -> (result: Geometry, ok: bool) {
             log.error("Failed to parse MultiPolygon coordinates")
             return Geometry {}, false
         }
-        return MultiPolygon{coordinates = polygons, bbox = bbox}, true
+        return MultiPolygon { coordinates = polygons, bbox = bbox }, true
 
     case "GeometryCollection":
         raw_geoms, geoms_ok := raw.geometries.?
