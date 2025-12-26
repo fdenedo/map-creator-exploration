@@ -1,4 +1,4 @@
-package main
+package geojson
 
 import "core:encoding/json"
 import "core:mem"

@@ -1,10 +1,12 @@
 package main
 
+import "geojson"
 import "base:runtime"
 import "core:mem/virtual"
 import "core:path/filepath"
 import "core:log"
 import "core:os"
+
 
 DATA_DIR :: #directory // For the dir of the current file
 
@@ -35,7 +37,7 @@ main :: proc() {
 
     // parse_geojson uses temp_allocator internally for JSON intermediate processing
     // Final domain types use context.allocator (default heap allocator)
-    geojson, err := parse_geojson(data)
+    g, err := geojson.parse_geojson(data)
     if err.category != .None {
         if err.path != "" {
             log.errorf("Failed to parse GeoJSON at %s: %s", err.path, err.message)
@@ -45,6 +47,6 @@ main :: proc() {
         return
     }
 
-    fc := geojson.(FeatureCollection)
+    fc := g.(geojson.FeatureCollection)
     log.infof("Parsed FeatureCollection with %d features", len(fc.features))
 }

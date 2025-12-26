@@ -1,4 +1,4 @@
-package main
+package geojson
 
 import "core:encoding/json"
 
@@ -162,6 +162,9 @@ Parse_Error :: struct {
 // PARSING FUNCTIONS
 // ========================================
 
+// TODO: GeoJSON files can be large, so we need to make sure that, when sensible to do so, we process
+// as much as possible, and provide clear and expressive errors when objects cannot be processed.
+// E.g. it might make sense to render all of the geometry that is valid, and leave out invalid geometry
 parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: GeoJSON, err: Parse_Error) {
     // Final domain types use the provided allocator (caller owns this memory)
     // JSON parsing intermediates use temp_allocator (freed automatically)
@@ -553,7 +556,7 @@ parse_line_array :: proc(val: json.Value) -> ([][]Position, Parse_Error) {
 parse_ring_array :: proc(val: json.Value) -> ([]LinearRing, Parse_Error) {
     arr, arr_ok := val.(json.Array)
     if !arr_ok {
-        return nil, Parse_Error{
+        return nil, Parse_Error {
             category = .Invalid_Type,
             message = "Expected array for LinearRing coordinates",
         }
