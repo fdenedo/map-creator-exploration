@@ -30,7 +30,7 @@ render :: proc(app: ^Application, render_state: ^platform.RenderState) {
 
 on_event :: proc(app: ^Application, event: ^platform.Event) {
     #reverse for &layer in app.layers {
-        if !layer_on_event(&layer, event) do return
+        if layer_on_event(&layer, event) do return
     }
 }
 
@@ -48,10 +48,10 @@ layer_render :: proc(layer: ^Layer, render_state: ^platform.RenderState) {
     }
 }
 
-layer_on_event :: proc(layer: ^Layer, event: ^platform.Event) -> (propagated: bool) {
+layer_on_event :: proc(layer: ^Layer, event: ^platform.Event) -> (handled: bool) {
     switch &l in layer {
     case MapLayer:
         return map_layer_on_event(&l, event)
     }
-    return false // TODO: could be that we return true here, not sure yet
+    return true // TODO: could be that we return false here, not sure yet
 }

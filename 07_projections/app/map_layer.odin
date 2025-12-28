@@ -37,8 +37,8 @@ map_layer_render :: proc(self: ^MapLayer, render_state: ^platform.RenderState) {
     platform.line_renderer_draw(&render_state.line_renderer, &uniforms, 1.0)
 }
 
-map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (propagated: bool) {
-    return true
+map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (handled: bool) {
+    return false
 }
 
 // Converts polygon rings into line segments for the line renderer
