@@ -52,6 +52,7 @@ get_bounds :: proc(proj: Projection) -> ProjectionBounds {
     }
 }
 
+// TODO: consider moving normalisation to the vertex shader
 normalise :: proc(geo: GeoCoord, type: ProjectionType) -> GeoCoord {
     switch type {
     case .Equirectangular:
