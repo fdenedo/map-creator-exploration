@@ -5,11 +5,22 @@ import "../core/projection"
 import "../core/geojson"
 import "../platform"
 
+MapLayer :: struct {
+    camera: projection.Camera,
+    projection: projection.Projection,
+    data: geojson.GeoJSON,
+    data_projected_cache: geojson.GeoJSON_Projected,
+    line_buffer: [dynamic]core.WorldVec2, // Scratch buffer for collecting line segments
+}
+
 map_layer_update :: proc(self: ^MapLayer) {
-    // Only running this on init right now, need to change this
+    // Fit camera to show the entire projection bounds (the "canvas")
     self.camera = projection.create_camera()
-    projection.camera_update_aspect_ratio(&self.camera)
-    self.data_projected_cache = geojson.project_geojson(self.data, self.projection) // Don't do this every frame
+    bounds := projection.get_bounds(self.projection)
+    projection.camera_fit_to_bounds(&self.camera, bounds)
+
+    // Project GeoJSON data to world coordinates
+    self.data_projected_cache = geojson.project_geojson(self.data, self.projection)
 }
 
 map_layer_render :: proc(self: ^MapLayer, render_state: ^platform.RenderState) {
