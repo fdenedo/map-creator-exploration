@@ -12,6 +12,46 @@ ProjectionType :: enum {
     Orthographic,
 }
 
+// The shape of the projection bounds
+BoundsShape :: enum {
+    Rectangle,
+    Circle,
+    Ellipse,
+}
+
+// The bounding rectangle/shape of the entire projectable world in world coordinates
+ProjectionBounds :: struct {
+    min_x, max_x: f32,
+    min_y, max_y: f32,
+    shape: BoundsShape,
+}
+
+// Returns the world-coordinate bounds for the full globe under this projection
+get_bounds :: proc(proj: Projection) -> ProjectionBounds {
+    switch proj.type {
+    case .Equirectangular:
+        // Full globe: longitude -180 to +180 (x: -π to +π), latitude -90 to +90 (y: -π/2 to +π/2)
+        return ProjectionBounds {
+            min_x = -math.PI,
+            max_x =  math.PI,
+            min_y = -math.PI / 2,
+            max_y =  math.PI / 2,
+            shape = .Rectangle,
+        }
+    case .Orthographic:
+        // Orthographic projects visible hemisphere to a unit circle
+        return ProjectionBounds {
+            min_x = -1,
+            max_x =  1,
+            min_y = -1,
+            max_y =  1,
+            shape = .Circle,
+        }
+    case:
+        return ProjectionBounds {}
+    }
+}
+
 project_f32 :: proc(geo: GeoCoord, proj: Projection) -> WorldVec2 {
     switch proj.type {
     case .Equirectangular:

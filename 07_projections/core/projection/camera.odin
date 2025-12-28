@@ -11,34 +11,83 @@ WorldVec2   :: core.WorldVec2
 Matrix4     :: core.Matrix4
 
 Camera :: struct {
+    // Base view bounds in world coordinates (computed from projection bounds + window aspect)
+    // At zoom=1.0, this is exactly what's visible
+    base_min_x, base_max_x: f32,
+    base_min_y, base_max_y: f32,
+
+    // Zoom level: 1.0 = show full canvas, 2.0 = 2x magnification (half the area visible)
     zoom: f32,
-    aspect_ratio: f32,
 }
 
 create_camera :: proc() -> Camera {
     return Camera {
-        zoom         = 1.0,
-        aspect_ratio = 1.0 // Update using camera_update_aspect_ratio() at first opportunity
+        base_min_x = -1,
+        base_max_x =  1,
+        base_min_y = -1,
+        base_max_y =  1,
+        zoom = 1.0,
     }
 }
 
-camera_update_aspect_ratio :: proc(camera: ^Camera) {
-    new_aspect := platform.width() / platform.height()
+// Fits the camera base view to the projection bounds (the "canvas")
+// The bounds maintain their natural aspect ratio - letterboxing/pillarboxing is handled by the projection matrix
+camera_fit_to_bounds :: proc(camera: ^Camera, bounds: ProjectionBounds, padding: f32 = 0.05) {
+    bounds_width  := bounds.max_x - bounds.min_x
+    bounds_height := bounds.max_y - bounds.min_y
+    bounds_center_x := (bounds.min_x + bounds.max_x) / 2
+    bounds_center_y := (bounds.min_y + bounds.max_y) / 2
 
-    if abs(camera.aspect_ratio - new_aspect) > 0.001 {
-        camera.aspect_ratio = new_aspect
-    }
+    // Add padding to the bounds
+    padded_half_width  := (bounds_width / 2) * (1 + padding)
+    padded_half_height := (bounds_height / 2) * (1 + padding)
+
+    camera.base_min_x = bounds_center_x - padded_half_width
+    camera.base_max_x = bounds_center_x + padded_half_width
+    camera.base_min_y = bounds_center_y - padded_half_height
+    camera.base_max_y = bounds_center_y + padded_half_height
 }
 
+// Computes the actual view bounds after applying zoom
+camera_get_view_bounds :: proc(camera: Camera) -> (left, right, bottom, top: f32) {
+    center_x := (camera.base_min_x + camera.base_max_x) / 2
+    center_y := (camera.base_min_y + camera.base_max_y) / 2
+    half_width  := (camera.base_max_x - camera.base_min_x) / 2 / camera.zoom
+    half_height := (camera.base_max_y - camera.base_min_y) / 2 / camera.zoom
+
+    return center_x - half_width, center_x + half_width, center_y - half_height, center_y + half_height
+}
+
+// Builds an orthographic projection matrix that maps view bounds to NDC (-1 to +1)
+// Maintains the canvas aspect ratio regardless of window shape (letterboxing/pillarboxing)
 view_proj_matrix :: proc(camera: Camera) -> Matrix4 {
-    z := camera.zoom
-    a := camera.aspect_ratio
+    left, right, bottom, top := camera_get_view_bounds(camera)
+
+    canvas_width  := right - left
+    canvas_height := top - bottom
+    canvas_aspect := canvas_width / canvas_height
+
+    window_aspect := platform.width() / platform.height()
+
+    scale_x, scale_y: f32
+    if canvas_aspect > window_aspect {
+        // Fit to width, letterbox top/bottom
+        scale_x = 2 / canvas_width
+        scale_y = scale_x * window_aspect
+    } else {
+        // Fit to height, pillarbox left/right
+        scale_y = 2 / canvas_height
+        scale_x = scale_y / window_aspect
+    }
+
+    center_x := (left + right) / 2
+    center_y := (bottom + top) / 2
 
     return Matrix4 {
-        z,   0,   0,   z,
-        0, a*z,   0,   a*z,
-        0,   0,   1,   0,
-        0,   0,   0,   1,
+        scale_x,  0,        0,  -center_x * scale_x,
+        0,        scale_y,  0,  -center_y * scale_y,
+        0,        0,        1,  0,
+        0,        0,        0,  1,
     }
 }
 
