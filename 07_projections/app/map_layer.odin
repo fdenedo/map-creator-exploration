@@ -37,6 +37,10 @@ map_layer_render :: proc(self: ^MapLayer, render_state: ^platform.RenderState) {
     platform.line_renderer_draw(&render_state.line_renderer, &uniforms, 1.0)
 }
 
+map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (propagated: bool) {
+    return true
+}
+
 // Converts polygon rings into line segments for the line renderer
 collect_polygon_lines :: proc(buffer: ^[dynamic]core.WorldVec2, polygons: [][][][2]f32) {
     for polygon in polygons {
