@@ -74,7 +74,8 @@ map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (handled:
             drag_current, valid := proj.inverse_f32(world_pos, original_proj)
             if valid {
                 delta := drag_current - drag_start
-                self.projection.centre = proj.normalise(self.drag_start_centre - delta, self.projection.type)
+                new_centre := self.drag_start_centre - delta
+                self.projection.centre = proj.clamp_centre_to_view(new_centre, self.camera, self.projection.type)
                 self.projection_dirty = true
             }
             return true

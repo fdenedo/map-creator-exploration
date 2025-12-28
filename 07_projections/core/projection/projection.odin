@@ -71,6 +71,35 @@ normalise :: proc(geo: GeoCoord, type: ProjectionType) -> GeoCoord {
     }
 }
 
+// Clamp projection centre so the view doesn't go past canvas bounds
+// This prevents panning beyond the edge of the map
+clamp_centre_to_view :: proc(centre: GeoCoord, camera: Camera, proj_type: ProjectionType) -> GeoCoord {
+    bounds := get_bounds(Projection { centre = centre, type = proj_type })
+    left, right, bottom, top := camera_get_view_bounds(camera)
+
+    view_half_width  := (right - left) / 2
+    view_half_height := (top - bottom) / 2
+    canvas_half_width  := (bounds.max_x - bounds.min_x) / 2
+    canvas_half_height := (bounds.max_y - bounds.min_y) / 2
+
+    result := centre
+
+    // Clamp Y (latitude) - don't allow view to go past poles
+    if view_half_height >= canvas_half_height {
+        // View is taller than canvas - lock to centre
+        result.y = 0
+    } else {
+        max_centre_y := bounds.max_y - view_half_height
+        min_centre_y := bounds.min_y + view_half_height
+        result.y = clamp(centre.y, min_centre_y, max_centre_y)
+    }
+
+    // X (longitude) wraps, so no clamping needed - just normalise
+    result.x = math.mod(centre.x + math.PI, 2 * math.PI) - math.PI
+
+    return result
+}
+
 project_f32 :: proc(geo: GeoCoord, proj: Projection) -> WorldVec2 {
     switch proj.type {
     case .Equirectangular:
