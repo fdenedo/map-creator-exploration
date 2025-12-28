@@ -95,18 +95,98 @@ project_f64 :: proc(geo: GeoCoord64, proj: Projection) -> WorldVec2 {
     }
 }
 
-inverse :: proc(world: WorldVec2, proj: Projection) -> GeoCoord {
+// Inverse projection: world coordinates -> geographic coordinates (f32)
+// Returns (longitude, latitude) in radians
+// For orthographic, returns (0,0) if the point is outside the visible hemisphere (rho > 1)
+inverse_f32 :: proc(world: WorldVec2, proj: Projection) -> (geo: GeoCoord, valid: bool) {
     switch proj.type {
     case .Equirectangular:
         return GeoCoord {
             world[0] + proj.centre[0],
-            world[1] + proj.centre[1]
-        }
+            world[1] + proj.centre[1],
+        }, true
+
     case .Orthographic:
-        return GeoCoord {
-            0.0,
-            0.0
+        x := world[0]
+        y := world[1]
+        rho := math.sqrt(x*x + y*y)
+
+        // Point is outside the visible hemisphere
+        if rho > 1.0 {
+            return GeoCoord {}, false
         }
-    case: return GeoCoord {}
+
+        // Avoid division by 0 at centre
+        if rho < 1e-10 {
+            return proj.centre, true
+        }
+
+        c := math.asin(rho)
+        sin_c := math.sin(c)
+        cos_c := math.cos(c)
+
+        lat_0 := proj.centre[1]
+        lon_0 := proj.centre[0]
+
+        // Latitude (phi)
+        phi := math.asin(cos_c * math.sin(lat_0) + (y * sin_c * math.cos(lat_0)) / rho)
+
+        // Longitude (lambda)
+        lambda := lon_0 + math.atan2(x * sin_c, rho * math.cos(lat_0) * cos_c - y * math.sin(lat_0) * sin_c)
+
+        return GeoCoord { lambda, phi }, true
+
+    case:
+        return GeoCoord {}, false
     }
+}
+
+// For orthographic, returns (0,0) if the point is outside the visible hemisphere (rho > 1)
+inverse_f64 :: proc(world: WorldVec2, proj: Projection) -> (geo: GeoCoord64, valid: bool) {
+    switch proj.type {
+    case .Equirectangular:
+        return GeoCoord64 {
+            f64(world[0]) + f64(proj.centre[0]),
+            f64(world[1]) + f64(proj.centre[1]),
+        }, true
+
+    case .Orthographic:
+        x := f64(world[0])
+        y := f64(world[1])
+        rho := math.sqrt(x*x + y*y)
+
+        // Point is outside the visible hemisphere
+        if rho > 1.0 {
+            return GeoCoord64 {}, false
+        }
+
+        // Avoid division by 0 at centre
+        if rho < 1e-10 {
+            return GeoCoord64 { f64(proj.centre[0]), f64(proj.centre[1]) }, true
+        }
+
+        c := math.asin(rho)
+        sin_c := math.sin(c)
+        cos_c := math.cos(c)
+
+        lat_0 := f64(proj.centre[1])
+        lon_0 := f64(proj.centre[0])
+
+        // Latitude (phi)
+        phi := math.asin(cos_c * math.sin(lat_0) + (y * sin_c * math.cos(lat_0)) / rho)
+
+        // Longitude (lambda)
+        lambda := lon_0 + math.atan2(x * sin_c, rho * math.cos(lat_0) * cos_c - y * math.sin(lat_0) * sin_c)
+
+        return GeoCoord64 { lambda, phi }, true
+
+    case:
+        return GeoCoord64 {}, false
+    }
+}
+
+// Convenience wrapper matching the old signature (returns just the coordinate)
+inverse :: proc(world: WorldVec2, proj: Projection) -> GeoCoord {
+    geo, _ := inverse_f32(world, proj)
+    return geo
 }

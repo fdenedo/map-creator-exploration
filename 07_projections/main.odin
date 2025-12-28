@@ -88,11 +88,12 @@ init :: proc "c" () {
 
     platform.window_setup(&default_context)
     platform.render_init(&render_state)
-    app.update(&current_app, 0.0) // Note: not currently using dt
 }
 
 frame :: proc "c" () {
     context = default_context
+
+    app.update(&current_app, 0.0) // Note: not currently using dt
 
     platform.render_begin_frame(&render_state)
     app.render(&current_app, &render_state)

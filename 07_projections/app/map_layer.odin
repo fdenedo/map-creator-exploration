@@ -1,30 +1,47 @@
 package app
 
 import "../core"
-import "../core/projection"
+import proj "../core/projection"
 import "../core/geojson"
 import "../platform"
 
 MapLayer :: struct {
-    camera: projection.Camera,
-    projection: projection.Projection,
+    camera: proj.Camera,
+    projection: proj.Projection,
     data: geojson.GeoJSON,
     data_projected_cache: geojson.GeoJSON_Projected,
     line_buffer: [dynamic]core.WorldVec2, // Scratch buffer for collecting line segments
+
+    drag_last: Maybe(proj.GeoCoord),
+
+    camera_dirty: bool,
+    projection_dirty: bool,
+}
+
+map_layer_create :: proc(self: ^MapLayer) {
+    self.camera = proj.create_camera()
+    self.projection = proj.Projection { type = .Equirectangular }
+    self.camera_dirty = true
+    self.projection_dirty = true
 }
 
 map_layer_update :: proc(self: ^MapLayer) {
     // Fit camera to show the entire projection bounds (the "canvas")
-    self.camera = projection.create_camera()
-    bounds := projection.get_bounds(self.projection)
-    projection.camera_fit_to_bounds(&self.camera, bounds)
+    if self.camera_dirty {
+        bounds := proj.get_bounds(self.projection)
+        proj.camera_fit_to_bounds(&self.camera, bounds)
+        self.camera_dirty = false
+    }
 
     // Project GeoJSON data to world coordinates
-    self.data_projected_cache = geojson.project_geojson(self.data, self.projection)
+    if self.projection_dirty {
+        self.data_projected_cache = geojson.project_geojson(self.data, self.projection)
+        self.projection_dirty = false
+    }
 }
 
 map_layer_render :: proc(self: ^MapLayer, render_state: ^platform.RenderState) {
-    view_proj := projection.view_proj_matrix(self.camera)
+    view_proj := proj.view_proj_matrix(self.camera)
     uniforms := platform.make_uniforms(view_proj)
 
     // Collect all line segments from polygons (drawing outlines only for now)
@@ -38,6 +55,20 @@ map_layer_render :: proc(self: ^MapLayer, render_state: ^platform.RenderState) {
 }
 
 map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (handled: bool) {
+    #partial switch event.type {
+    case .MOUSE_DOWN:
+        self.drag_last, _ = proj.inverse_f32(core.WorldVec2 { event.mouse_x, event.mouse_y }, self.projection)
+    case .MOUSE_MOVE:
+        if drag_last, ok := self.drag_last.?; ok {
+            drag_current, _ := proj.inverse_f32(core.WorldVec2 { event.mouse_x, event.mouse_y }, self.projection)
+            delta := drag_current - drag_last
+            self.projection.centre -= delta * 0.01
+            self.drag_last = drag_current
+            self.projection_dirty = true
+        }
+    case .MOUSE_UP:
+        self.drag_last = nil
+    }
     return false
 }
 

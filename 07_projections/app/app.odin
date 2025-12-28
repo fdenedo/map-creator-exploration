@@ -14,6 +14,11 @@ create :: proc() -> Application {
 
 add_layer :: proc(app: ^Application, layer: Layer) {
     append(&app.layers, layer)
+    new_layer := &app.layers[len(app.layers) - 1]
+    switch &l in new_layer {
+    case MapLayer:
+        map_layer_create(&l)
+    }
 }
 
 update :: proc(app: ^Application, dt: f32) {
