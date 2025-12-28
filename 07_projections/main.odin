@@ -107,4 +107,6 @@ cleanup :: proc "c" () {
 
 event :: proc "c" (e: ^platform.Event) {
     context = default_context
+
+    app.on_event(&current_app, e)
 }
