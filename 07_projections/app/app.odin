@@ -1,5 +1,7 @@
 package app
 
+import "../platform"
+
 Application :: struct {
     layers: [dynamic]Layer,
 }
@@ -20,9 +22,9 @@ update :: proc(app: ^Application, dt: f32) {
     }
 }
 
-render :: proc(app: ^Application) {
+render :: proc(app: ^Application, render_state: ^platform.RenderState) {
     for &layer in app.layers {
-        layer_render(&layer)
+        layer_render(&layer, render_state)
     }
 }
 
@@ -33,9 +35,9 @@ layer_update :: proc(layer: ^Layer) {
     }
 }
 
-layer_render :: proc(layer: ^Layer) {
+layer_render :: proc(layer: ^Layer, render_state: ^platform.RenderState) {
     switch &l in layer {
     case MapLayer:
-        map_layer_render(&l)
+        map_layer_render(&l, render_state)
     }
 }

@@ -255,7 +255,7 @@ parse_geojson :: proc(data: []byte, allocator := context.allocator) -> (result: 
 
 raw_to_feature_collection :: proc(raw: Raw_FeatureCollection) -> (result: FeatureCollection, err: Parse_Error) {
     processed_features := make([dynamic]Feature)
-    defer delete(processed_features)
+    // Note: Do NOT defer delete - the returned slice takes ownership of the backing memory
 
     for feature in raw.features {
         processed, feature_err := raw_to_feature(feature)

@@ -15,6 +15,7 @@ DATA_DIR :: #directory // For the dir of the current file
 // GLOBALS
 default_context: runtime.Context
 current_app: app.Application
+render_state: platform.RenderState
 
 main :: proc() {
     context.logger = log.create_console_logger()
@@ -26,9 +27,10 @@ main :: proc() {
         height = 600,
     }
 
-    current_app  := app.create()
+    current_app   = app.create()
     geojson_data := parse_geojson_file("ne_110m_land.geojson")
 
+    // For debugging
     g_as_fc := geojson_data.(geojson.FeatureCollection)
     log.infof("Parsed FeatureCollection with %d features", len(g_as_fc.features))
 
@@ -85,12 +87,16 @@ init :: proc "c" () {
     context = default_context
 
     platform.window_setup(&default_context)
+    platform.render_init(&render_state)
+    app.update(&current_app, 0.0) // Note: not currently using dt
 }
 
 frame :: proc "c" () {
     context = default_context
 
-    app.render(&current_app)
+    platform.render_begin_frame(&render_state)
+    app.render(&current_app, &render_state)
+    platform.render_end_frame(&render_state)
 }
 
 cleanup :: proc "c" () {
