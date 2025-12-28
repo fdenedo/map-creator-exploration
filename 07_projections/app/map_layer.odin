@@ -58,6 +58,7 @@ map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (handled:
     #partial switch event.type {
     case .MOUSE_DOWN:
         self.drag_last, _ = proj.inverse_f32(core.WorldVec2 { event.mouse_x, event.mouse_y }, self.projection)
+        return true
     case .MOUSE_MOVE:
         if drag_last, ok := self.drag_last.?; ok {
             drag_current, _ := proj.inverse_f32(core.WorldVec2 { event.mouse_x, event.mouse_y }, self.projection)
@@ -65,9 +66,12 @@ map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (handled:
             self.projection.centre -= delta * 0.01
             self.drag_last = drag_current
             self.projection_dirty = true
+            return true
         }
     case .MOUSE_UP:
         self.drag_last = nil
+        return true
+
     }
     return false
 }
