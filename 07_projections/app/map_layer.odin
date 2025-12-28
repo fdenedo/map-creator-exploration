@@ -12,7 +12,8 @@ MapLayer :: struct {
     data_projected_cache: geojson.GeoJSON_Projected,
     line_buffer: [dynamic]core.WorldVec2, // Scratch buffer for collecting line segments
 
-    drag_last: Maybe(proj.GeoCoord),
+    drag_start_geo: Maybe(proj.GeoCoord),      // Geo coord where drag started
+    drag_start_centre: proj.GeoCoord,          // Projection centre when drag started
 
     camera_dirty: bool,
     projection_dirty: bool,
@@ -49,7 +50,6 @@ map_layer_render :: proc(self: ^MapLayer, render_state: ^platform.RenderState) {
     collect_polygon_lines(&self.line_buffer, self.data_projected_cache.polygons)
     collect_lines(&self.line_buffer, self.data_projected_cache.lines)
 
-    // Update and draw
     platform.line_renderer_update(&render_state.line_renderer, self.line_buffer[:])
     platform.line_renderer_draw(&render_state.line_renderer, &uniforms, 1.0)
 }
@@ -57,21 +57,30 @@ map_layer_render :: proc(self: ^MapLayer, render_state: ^platform.RenderState) {
 map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (handled: bool) {
     #partial switch event.type {
     case .MOUSE_DOWN:
-        self.drag_last, _ = proj.inverse_f32(core.WorldVec2 { event.mouse_x, event.mouse_y }, self.projection)
+        screen_pos := core.ScreenVec2 { event.mouse_x, event.mouse_y }
+        world_pos := proj.screen_to_world(screen_pos, self.camera, true)
+        geo, valid := proj.inverse_f32(world_pos, self.projection)
+        if valid {
+            self.drag_start_geo = geo
+            self.drag_start_centre = self.projection.centre
+        }
         return true
     case .MOUSE_MOVE:
-        if drag_last, ok := self.drag_last.?; ok {
-            drag_current, _ := proj.inverse_f32(core.WorldVec2 { event.mouse_x, event.mouse_y }, self.projection)
-            delta := drag_current - drag_last
-            self.projection.centre -= delta * 0.01
-            self.drag_last = drag_current
-            self.projection_dirty = true
+        if drag_start, ok := self.drag_start_geo.?; ok {
+            screen_pos := core.ScreenVec2 { event.mouse_x, event.mouse_y }
+            world_pos := proj.screen_to_world(screen_pos, self.camera, true)
+            original_proj := proj.Projection { centre = self.drag_start_centre, type = self.projection.type }
+            drag_current, valid := proj.inverse_f32(world_pos, original_proj)
+            if valid {
+                delta := drag_current - drag_start
+                self.projection.centre = self.drag_start_centre - delta
+                self.projection_dirty = true
+            }
             return true
         }
     case .MOUSE_UP:
-        self.drag_last = nil
+        self.drag_start_geo = nil
         return true
-
     }
     return false
 }
