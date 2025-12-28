@@ -4,7 +4,7 @@ import "core:math"
 
 Projection :: struct {
     centre: GeoCoord,
-    type: ProjectionType
+    type: ProjectionType,
 }
 
 ProjectionType :: enum {
@@ -52,6 +52,24 @@ get_bounds :: proc(proj: Projection) -> ProjectionBounds {
     }
 }
 
+normalise :: proc(geo: GeoCoord, type: ProjectionType) -> GeoCoord {
+    switch type {
+    case .Equirectangular:
+        return GeoCoord {
+            math.mod(geo.x + math.PI, 2 * math.PI) - math.PI,
+            clamp(geo.y, -math.PI / 2, math.PI / 2)
+        }
+
+    case .Orthographic:
+        // TODO: implement this
+        return geo
+
+    case:
+        // TODO: add log here maybe?
+        return geo
+    }
+}
+
 project_f32 :: proc(geo: GeoCoord, proj: Projection) -> WorldVec2 {
     switch proj.type {
     case .Equirectangular:
@@ -77,7 +95,7 @@ project_f64 :: proc(geo: GeoCoord64, proj: Projection) -> WorldVec2 {
     case .Equirectangular:
         return WorldVec2 {
             f32(geo[0] - f64(proj.centre[0])),
-            f32(geo[1] - f64(proj.centre[1])), // TODO: this probably needs to be inverted
+            f32(geo[1] - f64(proj.centre[1])),
         }
     case .Orthographic:
         lambda := geo[0]

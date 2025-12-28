@@ -65,6 +65,7 @@ map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (handled:
             self.drag_start_centre = self.projection.centre
         }
         return true
+
     case .MOUSE_MOVE:
         if drag_start, ok := self.drag_start_geo.?; ok {
             screen_pos := core.ScreenVec2 { event.mouse_x, event.mouse_y }
@@ -73,15 +74,23 @@ map_layer_on_event :: proc(self: ^MapLayer, event: ^platform.Event) -> (handled:
             drag_current, valid := proj.inverse_f32(world_pos, original_proj)
             if valid {
                 delta := drag_current - drag_start
-                self.projection.centre = self.drag_start_centre - delta
+                self.projection.centre = proj.normalise(self.drag_start_centre - delta, self.projection.type)
                 self.projection_dirty = true
             }
             return true
         }
+
     case .MOUSE_UP:
         self.drag_start_geo = nil
         return true
+
+    case .MOUSE_SCROLL:
+        self.camera.zoom += event.scroll_y * 0.1
+        self.camera.zoom = min(20.0, max(self.camera.zoom, 0.5))
+        self.camera_dirty = true
+        return true
     }
+
     return false
 }
 
