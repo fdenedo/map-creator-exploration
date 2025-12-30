@@ -1,8 +1,9 @@
 package geojson
 
+import "core:log"
 import "core:math"
 import "core:time"
-import "core:log"
+
 import "../../core"
 import "../../core/projection"
 
