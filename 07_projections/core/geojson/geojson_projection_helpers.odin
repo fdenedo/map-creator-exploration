@@ -1,6 +1,8 @@
 package geojson
 
 import "core:math"
+import "core:time"
+import "core:log"
 import "../../core"
 import "../../core/projection"
 
@@ -14,6 +16,14 @@ GeoJSON_Projected :: struct {
 // make this more parallel
 
 project_geojson :: proc(geojson: GeoJSON, proj: projection.Projection) -> GeoJSON_Projected {
+    when ODIN_DEBUG {
+        start := time.now()
+        defer {
+            elapsed := time.diff(start, time.now())
+            log.debugf("project_geojson took %v", elapsed)
+        }
+    }
+
     points_proj := make([dynamic][2]f32)
     lines_proj := make([dynamic][][2]f32)
     polygons_proj := make([dynamic][][][2]f32)
