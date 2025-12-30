@@ -1,10 +1,12 @@
 package platform
 
 import "base:runtime"
+import "core:log"
 import "core:strings"
 import sapp "shared:sokol/app"
 import sg "shared:sokol/gfx"
 import shelpers "shared:sokol/helpers"
+import "vendor:directx/d3d11"
 
 WindowConfig :: struct {
     title: string,
@@ -24,6 +26,8 @@ window_setup :: proc(ctx: ^runtime.Context) {
         allocator = sg.Allocator(shelpers.allocator(ctx)),
         logger = sg.Logger(shelpers.logger(ctx)),
     })
+    backend := sg.query_backend()
+    log.debug("Using backend:", backend)
 }
 
 window_shutdown :: proc() {
@@ -50,4 +54,8 @@ width :: proc() -> f32 {
 
 height :: proc() -> f32 {
     return sapp.heightf()
+}
+
+get_device_and_context_dx11 :: proc() -> (device: ^d3d11.IDevice, device_ctx: ^d3d11.IDeviceContext) {
+    return auto_cast sg.d3d11_device(), auto_cast sg.d3d11_device_context()
 }

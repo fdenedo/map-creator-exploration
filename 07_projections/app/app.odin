@@ -18,6 +18,8 @@ add_layer :: proc(app: ^Application, layer: Layer) {
     switch &l in new_layer {
     case MapLayer:
         map_layer_create(&l)
+    case UILayer:
+        ui_layer_create(&l)
     }
 }
 
@@ -43,6 +45,8 @@ layer_update :: proc(layer: ^Layer) {
     switch &l in layer {
     case MapLayer:
         map_layer_update(&l)
+    case UILayer:
+        ui_layer_update(&l)
     }
 }
 
@@ -50,6 +54,8 @@ layer_render :: proc(layer: ^Layer, render_state: ^platform.RenderState) {
     switch &l in layer {
     case MapLayer:
         map_layer_render(&l, render_state)
+    case UILayer:
+        ui_layer_render(&l, render_state)
     }
 }
 
@@ -57,6 +63,8 @@ layer_on_event :: proc(layer: ^Layer, event: ^platform.Event) -> (handled: bool)
     switch &l in layer {
     case MapLayer:
         return map_layer_on_event(&l, event)
+    case UILayer:
+        return ui_layer_on_event(&l, event)
     }
-    return true // TODO: could be that we return false here, not sure yet
+    return false
 }

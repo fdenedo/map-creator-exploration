@@ -21,7 +21,7 @@ MapLayer :: struct {
 
 map_layer_create :: proc(self: ^MapLayer) {
     self.camera = proj.create_camera()
-    self.projection = proj.Projection { type = .Equirectangular }
+    self.projection = proj.Projection { type = .Orthographic }
     self.camera_dirty = true
     self.projection_dirty = true
 }
