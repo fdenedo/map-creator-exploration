@@ -20,6 +20,7 @@ LineRenderer :: struct {
     pipeline: sg.Pipeline,
     buffer_quad: sg.Buffer,
     ibuffer: sg.Buffer,
+    ibuffer_capacity: int,
     count: int,
 }
 
@@ -61,20 +62,32 @@ line_renderer_init :: proc(r: ^LineRenderer) {
         data = { ptr = &line_quad, size = size_of(line_quad) }
     })
 
+    INITIAL_CAPACITY :: 50000
+    r.ibuffer_capacity = INITIAL_CAPACITY
     r.ibuffer = sg.make_buffer({
-        size = c.size_t(50000 * size_of(core.WorldVec2)),
+        size = c.size_t(INITIAL_CAPACITY * size_of(core.WorldVec2)),
         usage = { dynamic_update = true }
     })
 }
 
 line_renderer_update :: proc(r: ^LineRenderer, line_points: []core.WorldVec2) {
     r.count = len(line_points) / 2
-    if r.count > 0 {
-        sg.update_buffer(r.ibuffer, {
-            ptr = raw_data(line_points),
-            size = c.size_t(len(line_points) * size_of(core.WorldVec2))
+    if r.count == 0 do return
+
+    // Resize buffer if needed
+    if len(line_points) > r.ibuffer_capacity {
+        sg.destroy_buffer(r.ibuffer)
+        r.ibuffer_capacity = len(line_points) * 2 // Multiply to reduce future reallocations
+        r.ibuffer = sg.make_buffer({
+            size = c.size_t(r.ibuffer_capacity * size_of(core.WorldVec2)),
+            usage = { dynamic_update = true }
         })
     }
+
+    sg.update_buffer(r.ibuffer, {
+        ptr = raw_data(line_points),
+        size = c.size_t(len(line_points) * size_of(core.WorldVec2))
+    })
 }
 
 line_renderer_draw :: proc(r: ^LineRenderer, uniforms: ^Vs_Params, line_width: f32) {

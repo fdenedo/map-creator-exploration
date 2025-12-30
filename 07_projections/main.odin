@@ -28,7 +28,7 @@ main :: proc() {
     }
 
     current_app   = app.create()
-    geojson_data := parse_geojson_file("ne_110m_land.geojson")
+    geojson_data := parse_geojson_file("ne_50m_land.geojson")
 
     // For debugging
     g_as_fc := geojson_data.(geojson.FeatureCollection)
