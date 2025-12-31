@@ -109,11 +109,9 @@ RenderState :: struct {
     line_renderer: LineRenderer,
 }
 
-// clear_value = { 0.1, 0.1, 0.15, 1.0 } - a dark blue I like
-
 render_init :: proc(r: ^RenderState) {
     r.pass_action = {
-        colors = { 0 = { load_action = .CLEAR, clear_value = { 1.0, 1.0, 1.0, 1.0 } } },
+        colors = { 0 = { load_action = .CLEAR, clear_value = { 0.1, 0.1, 0.15, 1.0 } } },
     }
 
     line_renderer_init(&r.line_renderer)
