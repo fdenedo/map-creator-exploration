@@ -35,7 +35,8 @@ main :: proc() {
     log.infof("Parsed FeatureCollection with %d features", len(g_as_fc.features))
 
     app.add_layer(&current_app, app.MapLayer { data = geojson_data })
-    app.add_layer(&current_app, app.UILayer { projection = .Orthographic })
+    map_layer := app.get_map_layer(&current_app)
+    app.add_layer(&current_app, app.UILayer { projection = .Orthographic, map_layer = map_layer })
     platform.window_run(
         config,
         {

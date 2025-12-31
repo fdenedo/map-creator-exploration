@@ -23,6 +23,15 @@ add_layer :: proc(app: ^Application, layer: Layer) {
     }
 }
 
+get_map_layer :: proc(app: ^Application) -> ^MapLayer {
+    for &layer in app.layers {
+        if l, ok := &layer.(MapLayer); ok {
+            return l
+        }
+    }
+    return nil
+}
+
 update :: proc(app: ^Application, dt: f32) {
     for &layer in app.layers {
         layer_update(&layer)

@@ -10,6 +10,7 @@ import proj "../core/projection"
 import "../platform"
 
 UILayer :: struct {
+    map_layer: ^MapLayer,
     projection: proj.ProjectionType,
     supported_projections: map[proj.ProjectionType]string,
     initialised: bool,
@@ -64,6 +65,8 @@ ui_layer_render :: proc(self: ^UILayer, render_state: ^platform.RenderState) {
                 is_selected := label == current_proj
                 if imgui.Selectable(strings.clone_to_cstring(label, context.temp_allocator), is_selected) {
                     self.projection = p
+                    self.map_layer.projection.type = p
+                    self.map_layer.projection_dirty = true
                 }
                 if (is_selected) {
                     imgui.SetItemDefaultFocus()
