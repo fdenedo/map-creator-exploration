@@ -8,9 +8,11 @@ Point :: struct {
 }
 
 Path :: struct {
-    id:     int,
-    points: [dynamic]Point,
-    closed: bool,
+    id:         int,
+    points:     [dynamic]Point,
+    closed:     bool,
+    fill_color: [4]f32,
+    has_fill:   bool,
 }
 
 SpecialPoint :: struct {
@@ -26,6 +28,17 @@ HandleGeometry :: struct {
 
 PathGeometry :: struct {
     curve_lines: [dynamic]WorldVec2,
+}
+
+StencilVertex :: struct {
+    pos: WorldVec2,
+}
+
+FillGeometry :: struct {
+    stencil_fans: [dynamic]StencilVertex,
+    fan_counts:   [dynamic]int,
+    fill_boxes:   [dynamic][4]WorldVec2,
+    colors:       [dynamic][4]f32,
 }
 
 ANCHOR_SIZE :: 5.0
@@ -134,4 +147,107 @@ generate_bezier :: proc(start: Point, end: Point, tolerance: f32) -> []WorldVec2
     }
 
     return bezier[:]
+}
+
+generate_stencil_fan :: proc(path: Path, out: ^[dynamic]StencilVertex) -> int {
+    if !path.closed || len(path.points) < 3 do return 0
+
+    // Compute centroid as fan center
+    centroid := WorldVec2{0, 0}
+    for point in path.points {
+        centroid += point.pos
+    }
+    centroid /= f32(len(path.points))
+
+    // Generate explicit triangles (since TRIANGLE_FAN doesn't exist in sokol)
+    // Each triangle: centroid, point[i], point[i+1]
+    tri_count := 0
+    for i in 0..<len(path.points) {
+        next_i := (i + 1) % len(path.points)
+
+        // Triangle: centroid -> current -> next
+        append(out, StencilVertex{centroid})
+        append(out, StencilVertex{path.points[i].pos})
+        append(out, StencilVertex{path.points[next_i].pos})
+
+        tri_count += 1
+    }
+
+    // Return triangle count
+    return tri_count
+}
+
+generate_fill_box :: proc(path: Path) -> [4]WorldVec2 {
+    if !path.closed || !path.has_fill || len(path.points) < 3 do return {}
+
+    // Compute bounding box of entire path
+    min_x, min_y := max(f32), max(f32)
+    max_x, max_y := min(f32), min(f32)
+
+    for point in path.points {
+        min_x = min(min_x, point.pos.x)
+        min_y = min(min_y, point.pos.y)
+        max_x = max(max_x, point.pos.x)
+        max_y = max(max_y, point.pos.y)
+    }
+
+    // Return 4 corners as quad
+    return [4]WorldVec2{
+        {min_x, min_y},
+        {max_x, min_y},
+        {max_x, max_y},
+        {min_x, max_y},
+    }
+}
+
+// Simple direct triangulation for testing (no stencil needed)
+FillTriangle :: struct {
+    v0, v1, v2: WorldVec2,
+}
+
+DirectFillGeometry :: struct {
+    triangles: [dynamic]FillTriangle,
+    colors: [dynamic][4]f32,
+}
+
+generate_fill_geometry_direct :: proc(es: ^EditorState, out: ^DirectFillGeometry) {
+    clear(&out.triangles)
+    clear(&out.colors)
+
+    for path in es.paths {
+        if !path.closed || !path.has_fill || len(path.points) < 3 do continue
+
+        // Simple fan triangulation from first point
+        for i in 1..<len(path.points)-1 {
+            append(&out.triangles, FillTriangle{
+                v0 = path.points[0].pos,
+                v1 = path.points[i].pos,
+                v2 = path.points[i+1].pos,
+            })
+        }
+
+        append(&out.colors, path.fill_color)
+    }
+}
+
+generate_fill_geometry :: proc(es: ^EditorState, out: ^FillGeometry) {
+    clear(&out.stencil_fans)
+    clear(&out.fan_counts)
+    clear(&out.fill_boxes)
+    clear(&out.colors)
+
+    for path in es.paths {
+        if !path.closed || !path.has_fill do continue
+
+        // Stencil pass: generate triangle fan
+        tri_count := generate_stencil_fan(path, &out.stencil_fans)
+        append(&out.fan_counts, tri_count)
+
+        // Cover pass: generate fill box
+        fill_box := generate_fill_box(path)
+        append(&out.fill_boxes, fill_box)
+
+        // Store color
+        append(&out.colors, path.fill_color)
+    }
 }

@@ -241,3 +241,83 @@ void main() {
 @end
 
 @program line vs_line fs_line
+
+/*
+========================================================================
+    STENCIL PASS VERTEX SHADER
+    Renders triangle fans to stencil buffer for winding number computation
+========================================================================
+*/
+@vs vs_stencil
+
+layout(binding=0) uniform vs_params {
+    mat4 u_camera_matrix;
+    vec2 u_viewport_size;
+    float u_point_size;
+};
+
+in vec2 position;
+
+void main() {
+    vec4 transformed = u_camera_matrix * vec4(position, 0.0, 1.0);
+    gl_Position = vec4(transformed.xy, 0.0, 1.0);
+}
+@end
+
+/*
+========================================================================
+    STENCIL PASS FRAGMENT SHADER
+    No color output, stencil only
+========================================================================
+*/
+@fs fs_stencil
+
+void main() {
+    // No color output, stencil only
+}
+@end
+
+@program stencil vs_stencil fs_stencil
+
+/*
+========================================================================
+    FILL PASS VERTEX SHADER
+    Renders quads for solid fill where stencil test passes
+========================================================================
+*/
+@vs vs_fill
+
+layout(binding=0) uniform vs_params {
+    mat4 u_camera_matrix;
+    vec2 u_viewport_size;
+    float u_point_size;
+};
+
+in vec2 position;
+
+void main() {
+    vec4 transformed = u_camera_matrix * vec4(position, 0.0, 1.0);
+    gl_Position = vec4(transformed.xy, 0.0, 1.0);
+}
+@end
+
+/*
+========================================================================
+    FILL PASS FRAGMENT SHADER
+    Outputs solid fill color
+========================================================================
+*/
+@fs fs_fill
+
+layout(binding=1) uniform fill_fs_params {
+    vec4 u_fill_color;
+};
+
+out vec4 color;
+
+void main() {
+    color = u_fill_color;
+}
+@end
+
+@program fill vs_fill fs_fill

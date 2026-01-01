@@ -31,6 +31,12 @@ camera_matrix :: proc(camera: Camera) -> Matrix4 {
     }
 }
 
+// TODO: after a bit of reading, I found that I shoudln't really be converting to NDC here
+// although I kinda knew this - "World Space" will eventually be defined by me, and it will
+// correspond to the map canvas. So there will be
+// World -> Clip (NDC, -1.0 to 1.0) -> Screen
+// I imagine we store feature data in world coordinates, and in the future probably (lon/lat)
+// We can convert to CLIP SPACE on the GPU
 screen_pixel_to_ndc :: proc(vec2: ScreenVec2, translate: bool) -> [2]f32 { // Probably inline to avoid confusion
     translation: f32 = translate ? 1.0 : 0.0
     return [2]f32{

@@ -15,6 +15,7 @@ state: struct {
     render: RenderState,
     handle_geo: HandleGeometry,
     path_geo: PathGeometry,
+    fill_geo: DirectFillGeometry,  // Using direct triangulation for now
 }
 
 default_context: runtime.Context
@@ -45,6 +46,8 @@ init :: proc "c" () {
         logger = sg.Logger(shelpers.logger(&default_context)),
     })
 
+    log.debugf("Stencil format: %v", sg.query_desc().environment.defaults.depth_format)
+
     editor_init(&state.editor)
     render_init(&state.render)
 }
@@ -55,7 +58,8 @@ frame :: proc "c" () {
         // Stable state that doesn't necessaarily need to be recalculated or changed per frame
         generate_handle_geometry(&state.editor, &state.handle_geo)
         generate_path_geometry(&state.editor, &state.path_geo)
-        render_update_geometry(&state.render, &state.handle_geo, &state.path_geo)
+        generate_fill_geometry_direct(&state.editor, &state.fill_geo)
+        render_update_geometry(&state.render, &state.handle_geo, &state.path_geo, &state.fill_geo)
         state.editor.should_rerender = false
     }
 
@@ -73,7 +77,7 @@ frame :: proc "c" () {
         selected_point = resolve_special_point(&state.editor, ref)
     }
 
-    render_frame(&state.render, state.editor.camera, hovered_point, selected_point)
+    render_frame(&state.render, state.editor.camera, &state.fill_geo, hovered_point, selected_point)
 }
 
 cleanup :: proc "c" () {

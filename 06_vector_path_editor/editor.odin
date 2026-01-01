@@ -138,6 +138,57 @@ editor_init :: proc(editor_state: ^EditorState) {
     editor_state.camera = create_camera()
     editor_state.should_rerender = true
     editor_state.input = IDLE {}
+
+    // Create a test path with fill enabled for testing
+    test_path := Path{
+        id = editor_state.next_path_id,
+        closed = true,
+        has_fill = true,
+        fill_color = {0.5, 0.7, 1.0, 0.5},  // Light blue with 50% alpha
+    }
+    editor_state.next_path_id += 1
+
+    // Create a square
+    size :: 0.75
+    offset :: WorldVec2{0, 0}
+
+    // Bottom-left
+    append(&test_path.points, Point{
+        id = editor_state.next_point_id,
+        pos = offset + WorldVec2{-size, -size},
+        handle_in = offset + WorldVec2{-size, -size},
+        handle_out = offset + WorldVec2{-size, -size},
+    })
+    editor_state.next_point_id += 1
+
+    // Bottom-right
+    append(&test_path.points, Point{
+        id = editor_state.next_point_id,
+        pos = offset + WorldVec2{size, -size},
+        handle_in = offset + WorldVec2{size, -size},
+        handle_out = offset + WorldVec2{size, -size},
+    })
+    editor_state.next_point_id += 1
+
+    // Top-right
+    append(&test_path.points, Point{
+        id = editor_state.next_point_id,
+        pos = offset + WorldVec2{size, size},
+        handle_in = offset + WorldVec2{size, size},
+        handle_out = offset + WorldVec2{size, size},
+    })
+    editor_state.next_point_id += 1
+
+    // Top-left
+    append(&test_path.points, Point{
+        id = editor_state.next_point_id,
+        pos = offset + WorldVec2{-size, size},
+        handle_in = offset + WorldVec2{-size, size},
+        handle_out = offset + WorldVec2{-size, size},
+    })
+    editor_state.next_point_id += 1
+
+    append(&editor_state.paths, test_path)
 }
 
 editor_handle_event :: proc(editor_state: ^EditorState, e: ^Event) {
@@ -223,6 +274,10 @@ handle_idle :: proc(es: ^EditorState, is: ^IDLE, e: ^Event) {
                 },
             }
             history_execute(&es.history, cmd, es)
+
+            // TODO: TEST - set path has fill to true
+            path.has_fill = true
+            path.fill_color = {0.5, 0.7, 1.0, 0.5}
         }
         if e.key_code == .DELETE || e.key_code == .BACKSPACE {
             if selected, ok := es.selected_point.?; ok {

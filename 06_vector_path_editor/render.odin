@@ -160,6 +160,233 @@ line_renderer_draw :: proc(r: ^LineRenderer, uniforms: ^Vs_Params, line_width: f
 }
 
 // ============================================================================
+// DirectFillRenderer - renders polygon fills with direct triangulation
+// ============================================================================
+
+DirectFillRenderer :: struct {
+    pip: sg.Pipeline,
+    vbuf: sg.Buffer,
+    num_triangles: int,
+}
+
+direct_fill_renderer_init :: proc(r: ^DirectFillRenderer) {
+    r.pip = sg.make_pipeline({
+        shader = sg.make_shader(fill_shader_desc(sg.query_backend())),
+        primitive_type = .TRIANGLES,
+        colors = {
+            0 = {
+                blend = {
+                    enabled = true,
+                    src_factor_rgb = .SRC_ALPHA,
+                    dst_factor_rgb = .ONE_MINUS_SRC_ALPHA,
+                    src_factor_alpha = .ONE,
+                    dst_factor_alpha = .ONE_MINUS_SRC_ALPHA,
+                },
+            },
+        },
+        layout = {
+            attrs = {
+                ATTR_fill_position = { format = .FLOAT2 },
+            },
+        },
+    })
+
+    r.vbuf = sg.make_buffer({
+        size = c.size_t(10000 * size_of(WorldVec2)),
+        usage = { dynamic_update = true },
+    })
+}
+
+direct_fill_renderer_update :: proc(r: ^DirectFillRenderer, geo: ^DirectFillGeometry) {
+    r.num_triangles = len(geo.triangles)
+
+    if r.num_triangles > 0 {
+        // Flatten triangles to vertex array
+        vertices: [dynamic]WorldVec2
+        defer delete(vertices)
+
+        for tri in geo.triangles {
+            append(&vertices, tri.v0, tri.v1, tri.v2)
+        }
+
+        sg.update_buffer(r.vbuf, {
+            ptr = raw_data(vertices),
+            size = c.size_t(len(vertices) * size_of(WorldVec2)),
+        })
+    }
+}
+
+direct_fill_renderer_draw :: proc(r: ^DirectFillRenderer, geom: ^DirectFillGeometry, uniforms: ^Vs_Params) {
+    if r.num_triangles == 0 do return
+
+    sg.apply_pipeline(r.pip)
+    sg.apply_bindings({ vertex_buffers = { 0 = r.vbuf } })
+    sg.apply_uniforms(UB_vs_params, { ptr = uniforms, size = size_of(Vs_Params) })
+
+    // Draw all triangles with the same color for now
+    if len(geom.colors) > 0 {
+        fs_uniforms := Fill_Fs_Params { u_fill_color = geom.colors[0] }
+        sg.apply_uniforms(UB_fill_fs_params, { ptr = &fs_uniforms, size = size_of(Fill_Fs_Params) })
+    }
+
+    sg.draw(0, r.num_triangles * 3, 1)
+}
+
+// ============================================================================
+// FillRenderer - renders polygon fills using stencil-and-cover
+// ============================================================================
+
+FillRenderer :: struct {
+    stencil_pip:  sg.Pipeline,
+    fill_pip:     sg.Pipeline,
+    stencil_vbuf: sg.Buffer,
+    fill_vbuf:    sg.Buffer,
+    num_paths:    int,
+    stencil_counts: [dynamic]int,
+}
+
+fill_renderer_init :: proc(r: ^FillRenderer) {
+    // Stencil pass pipeline - writes to stencil buffer only
+    r.stencil_pip = sg.make_pipeline({
+        shader = sg.make_shader(stencil_shader_desc(sg.query_backend())),
+        primitive_type = .TRIANGLES,
+        colors = {
+            0 = {
+                write_mask = {},  // No color writes
+            },
+        },
+        stencil = {
+            enabled = true,
+            front = {
+                fail_op = .KEEP,
+                depth_fail_op = .KEEP,
+                pass_op = .INCR_WRAP,
+                compare = .ALWAYS,
+            },
+            back = {
+                fail_op = .KEEP,
+                depth_fail_op = .KEEP,
+                pass_op = .DECR_WRAP,
+                compare = .ALWAYS,
+            },
+        },
+        depth = {
+            compare = .ALWAYS,
+            write_enabled = false,
+        },
+        cull_mode = .NONE,
+        layout = {
+            attrs = {
+                ATTR_stencil_position = { format = .FLOAT2 },
+            },
+        },
+    })
+
+    // Fill pass pipeline - draws where stencil != 0
+    r.fill_pip = sg.make_pipeline({
+        shader = sg.make_shader(fill_shader_desc(sg.query_backend())),
+        primitive_type = .TRIANGLE_STRIP,
+        colors = {
+            0 = {
+                blend = {
+                    enabled = true,
+                    src_factor_rgb = .SRC_ALPHA,
+                    dst_factor_rgb = .ONE_MINUS_SRC_ALPHA,
+                    src_factor_alpha = .ONE,
+                    dst_factor_alpha = .ONE_MINUS_SRC_ALPHA,
+                },
+            },
+        },
+        stencil = {
+            enabled = true,
+            front = {
+                compare = .NOT_EQUAL,
+            },
+            back = {
+                compare = .NOT_EQUAL,
+            },
+        },
+        depth = {
+            compare = .ALWAYS,
+            write_enabled = false,
+        },
+        layout = {
+            attrs = {
+                ATTR_fill_position = { format = .FLOAT2 },
+            },
+        },
+    })
+
+    // Create dynamic buffers
+    r.stencil_vbuf = sg.make_buffer({
+        size = c.size_t(10000 * size_of(StencilVertex)),
+        usage = { dynamic_update = true },
+    })
+
+    r.fill_vbuf = sg.make_buffer({
+        size = c.size_t(1000 * 4 * size_of(WorldVec2)),
+        usage = { dynamic_update = true },
+    })
+}
+
+fill_renderer_update :: proc(r: ^FillRenderer, geom: ^FillGeometry) {
+    r.num_paths = len(geom.colors)
+
+    // Upload stencil fan vertices
+    if len(geom.stencil_fans) > 0 {
+        sg.update_buffer(r.stencil_vbuf, {
+            ptr = raw_data(geom.stencil_fans),
+            size = c.size_t(len(geom.stencil_fans) * size_of(StencilVertex)),
+        })
+    }
+
+    // Upload fill box vertices
+    if len(geom.fill_boxes) > 0 {
+        sg.update_buffer(r.fill_vbuf, {
+            ptr = raw_data(geom.fill_boxes),
+            size = c.size_t(len(geom.fill_boxes) * size_of([4]WorldVec2)),
+        })
+    }
+
+    // Store fan counts for drawing
+    clear(&r.stencil_counts)
+    for count in geom.fan_counts {
+        append(&r.stencil_counts, count)
+    }
+}
+
+fill_renderer_draw :: proc(r: ^FillRenderer, geom: ^FillGeometry, uniforms: ^Vs_Params) {
+    if r.num_paths == 0 do return
+
+    // === PASS 1: Stencil ===
+    sg.apply_pipeline(r.stencil_pip)
+    sg.apply_bindings({ vertex_buffers = { 0 = r.stencil_vbuf } })
+    sg.apply_uniforms(UB_vs_params, { ptr = uniforms, size = size_of(Vs_Params) })
+
+    // Draw each triangle set (3 vertices per triangle)
+    vertex_offset := 0
+    for i in 0..<r.num_paths {
+        tri_count := r.stencil_counts[i]
+        vertex_count := tri_count * 3  // 3 vertices per triangle
+        sg.draw(vertex_offset, vertex_count, 1)
+        vertex_offset += vertex_count
+    }
+
+    // === PASS 2: Cover (Fill) ===
+    sg.apply_pipeline(r.fill_pip)
+    sg.apply_bindings({ vertex_buffers = { 0 = r.fill_vbuf } })
+    sg.apply_uniforms(UB_vs_params, { ptr = uniforms, size = size_of(Vs_Params) })
+
+    // Draw each fill box with its color
+    for i in 0..<r.num_paths {
+        fs_uniforms := Fill_Fs_Params { u_fill_color = geom.colors[i] }
+        sg.apply_uniforms(UB_fill_fs_params, { ptr = &fs_uniforms, size = size_of(Fill_Fs_Params) })
+
+        sg.draw(i * 4, 4, 1)  // 4 vertices per quad
+    }
+}
+
+// ============================================================================
 // RenderState - orchestrates all renderers
 // ============================================================================
 
@@ -175,6 +402,9 @@ RenderState :: struct {
 
     // Single-point renderer for hovered/selected states
     special_point: PointRenderer,
+
+    // Fill renderer for polygon fills (using direct triangulation for now)
+    direct_fill: DirectFillRenderer,
 }
 
 render_init :: proc(r: ^RenderState) {
@@ -192,18 +422,20 @@ render_init :: proc(r: ^RenderState) {
     point_renderer_init(&r.handles, r.shader_point)
     point_renderer_init(&r.anchors, r.shader_point)
     point_renderer_init(&r.special_point, r.shader_point)
+    direct_fill_renderer_init(&r.direct_fill)
 }
 
-render_update_geometry :: proc(r: ^RenderState, handle_geo: ^HandleGeometry, path_geo: ^PathGeometry) {
+render_update_geometry :: proc(r: ^RenderState, handle_geo: ^HandleGeometry, path_geo: ^PathGeometry, fill_geo: ^DirectFillGeometry) {
     context = default_context
 
     line_renderer_update(&r.curve_lines, path_geo.curve_lines[:][:])
     line_renderer_update(&r.handle_lines, handle_geo.lines[:])
     point_renderer_update(&r.handles, handle_geo.handle_points[:])
     point_renderer_update(&r.anchors, handle_geo.anchor_points[:])
+    direct_fill_renderer_update(&r.direct_fill, fill_geo)
 }
 
-render_frame :: proc(r: ^RenderState, camera: Camera, hovered_point: Maybe(SpecialPoint), selected_point: Maybe(SpecialPoint)) {
+render_frame :: proc(r: ^RenderState, camera: Camera, fill_geo: ^DirectFillGeometry, hovered_point: Maybe(SpecialPoint), selected_point: Maybe(SpecialPoint)) {
     context = default_context
 
     sg.begin_pass({
@@ -219,6 +451,9 @@ render_frame :: proc(r: ^RenderState, camera: Camera, hovered_point: Maybe(Speci
     HOVER_SCALE        :: 1.4
     SELECTED_DOT_SCALE :: 0.4
     WHITE              :: [4]f32{ 1.0, 1.0, 1.0, 1.0 }
+
+    // Draw fills FIRST (underneath everything)
+    direct_fill_renderer_draw(&r.direct_fill, fill_geo, &uniforms)
 
     line_renderer_draw(&r.curve_lines, &uniforms, 1.0)
     line_renderer_draw(&r.handle_lines, &uniforms, 1.0)
