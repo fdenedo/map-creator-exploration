@@ -8,8 +8,8 @@ Think about adding a debug layer, even though most of the things I would want to
 
 Note that this is likely going to be the base of the main application
 
-- [ ] Define high-level architecture
-- [ ] Copy relevant project code from project 07
+- [X] Define high-level architecture
+- [X] Copy relevant project code from project 07
 - [ ] Determine code that is relevant to use from project 06
 - [ ] Copy code from project 06
 - [ ] Build editor tools
