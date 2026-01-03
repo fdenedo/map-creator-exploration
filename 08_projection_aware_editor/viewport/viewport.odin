@@ -57,7 +57,7 @@ render_document_layer :: proc(view: ^Viewport, layer: ^doc.DocumentLayer) {
 // Sphere Pipeline
 // ============================================================================
 
-SUBDIVISION_TOLERANCE :: 0.005  // in world units (orthographic is -1 to 1)
+SUBDIVISION_TOLERANCE :: 0.001  // in world units (orthographic is -1 to 1)
 
 // Process a ring of positions through the sphere pipeline
 // Returns projected 2D points ready for rendering
