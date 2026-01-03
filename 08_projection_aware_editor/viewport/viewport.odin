@@ -29,7 +29,9 @@ viewport_create :: proc(doc: ^doc.Document) -> Viewport {
 	}
 }
 
-viewport_update :: proc(viewport: ^Viewport) {}
+viewport_update :: proc(viewport: ^Viewport, dt: u64) {
+	viewport.projection.centre[0] += f32(dt) * 0.0000000001
+}
 
 render_init :: proc(viewport: ^Viewport) {
 	platform.render_init(&viewport.render_cache)
