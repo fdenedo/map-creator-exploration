@@ -44,7 +44,7 @@ render_document_layer :: proc(view: ^Viewport, layer: ^doc.DocumentLayer) {
 	case doc.Vector:
 
 	case doc.GeoJSON:
-		view.geojson_projected_cache = geojson.project_geojson(&data.data, view.projection)
+		view.geojson_projected_cache = geojson.project_geojson(&data.data, view.projection) // TODO: move to viewport update, check for change
 		view_proj := proj.view_proj_matrix(view.camera)
 	    uniforms := platform.make_uniforms(view_proj)
 
