@@ -28,7 +28,6 @@ project_geojson :: proc(geojson: ^GeoJSON, proj: projection.Projection) -> GeoJS
     points_proj := make([dynamic][2]f32)
     lines_proj := make([dynamic][][2]f32)
     polygons_proj := make([dynamic][][][2]f32)
-    // Note: Do NOT defer delete - the returned slices take ownership of the backing memory
 
     switch &g in geojson {
     case FeatureCollection:
@@ -63,35 +62,35 @@ collect_projected_geometry :: proc(
         }
 
     case Point:
-        append(projected_points, project_geojson_coordinate(geom.coordinates, proj))
+        append(projected_points, ([2]f32)(project_geojson_coordinate(geom.coordinates, proj)))
 
     case MultiPoint:
         for point in geom.coordinates {
-            append(projected_points, project_geojson_coordinate(point, proj))
+            append(projected_points, ([2]f32)(project_geojson_coordinate(point, proj)))
         }
 
     case LineString:
-        line := make([]core.WorldVec2, len(geom.coordinates))
+        line := make([][2]f32, len(geom.coordinates))
         for point, index in geom.coordinates {
-            line[index] = project_geojson_coordinate(point, proj)
+            line[index] = ([2]f32)(project_geojson_coordinate(point, proj))
         }
         append(projected_lines, line)
 
     case MultiLineString:
         for line in geom.coordinates {
-            line_proj := make([]core.WorldVec2, len(line))
+            line_proj := make([][2]f32, len(line))
             for point, index in line {
-                line_proj[index] = project_geojson_coordinate(point, proj)
+                line_proj[index] = ([2]f32)(project_geojson_coordinate(point, proj))
             }
             append(projected_lines, line_proj)
         }
 
     case Polygon:
-        poly_proj := make([][]core.WorldVec2, len(geom.coordinates))
+        poly_proj := make([][][2]f32, len(geom.coordinates))
         for ring, ring_index in geom.coordinates {
-            ring_proj := make([]core.WorldVec2, len(ring))
+            ring_proj := make([][2]f32, len(ring))
             for point, point_index in ring {
-                ring_proj[point_index] = project_geojson_coordinate(point, proj)
+                ring_proj[point_index] = ([2]f32)(project_geojson_coordinate(point, proj))
             }
             poly_proj[ring_index] = ring_proj
         }
@@ -99,11 +98,11 @@ collect_projected_geometry :: proc(
 
     case MultiPolygon:
         for polygon in geom.coordinates {
-            poly_proj := make([][]core.WorldVec2, len(polygon))
+            poly_proj := make([][][2]f32, len(polygon))
             for ring, ring_index in polygon {
-                ring_proj := make([]core.WorldVec2, len(ring))
+                ring_proj := make([][2]f32, len(ring))
                 for point, point_index in ring {
-                    ring_proj[point_index] = project_geojson_coordinate(point, proj)
+                    ring_proj[point_index] = ([2]f32)(project_geojson_coordinate(point, proj))
                 }
                 poly_proj[ring_index] = ring_proj
             }

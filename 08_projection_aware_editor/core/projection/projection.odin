@@ -52,6 +52,14 @@ get_bounds :: proc(proj: Projection) -> ProjectionBounds {
     }
 }
 
+get_visibility_radius :: proc(type: ProjectionType) -> f32 {
+    switch type {
+    case .Equirectangular: return math.PI
+    case .Orthographic:    return math.PI / 2
+    case:				   return math.PI
+    }
+}
+
 // TODO: consider moving normalisation to the vertex shader
 normalise :: proc(geo: GeoCoord, type: ProjectionType) -> GeoCoord {
     switch type {
@@ -233,7 +241,6 @@ inverse_f64 :: proc(world: WorldVec2, proj: Projection) -> (geo: GeoCoord64, val
     }
 }
 
-// Convenience wrapper matching the old signature (returns just the coordinate)
 inverse :: proc(world: WorldVec2, proj: Projection) -> GeoCoord {
     geo, _ := inverse_f32(world, proj)
     return geo
