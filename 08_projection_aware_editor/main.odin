@@ -39,6 +39,7 @@ init :: proc "c" () {
     context = default_context
 
     platform.window_setup(&default_context)
+    platform.render_init(&render_state)
     viewport.render_init(&app_instance.viewport)
 }
 
