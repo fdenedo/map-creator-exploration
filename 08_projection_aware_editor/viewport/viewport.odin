@@ -4,9 +4,10 @@ import "core:math"
 
 import core     "../core"
 import doc 		"../core/document"
+import geojson  "../core/geojson"
 import platform "../platform"
 import proj		"../core/projection"
-import geojson  "../core/geojson"
+import tess		"../core/tesselation"
 
 Viewport :: struct {
 	camera: proj.Camera,
@@ -15,6 +16,7 @@ Viewport :: struct {
 
 	// TODO: put these in places where they make more sense, or at least organise them...
 	vector_line_buffer: [dynamic]core.WorldVec2,
+	triangle_buffer: [dynamic]tess.Triangle,
 	render_cache: platform.RenderState,
 }
 
@@ -132,9 +134,24 @@ collect_ring_lines :: proc(buffer: ^[dynamic]core.WorldVec2, ring: []core.WorldV
     }
 }
 
+collect_ring_triangles :: proc(buffer: ^[dynamic]tess.Triangle, ring: []core.WorldVec2) {
+    if len(ring) < 3 do return
+
+    // Fan from origin (0,0) - works with stencil-and-cover for any polygon shape
+    // The origin is at the center of the orthographic projection
+    triangles := tess.triangle_fan_from_origin(ring)
+    if triangles == nil do return
+    defer delete(triangles)
+
+    for tri in triangles {
+        append(buffer, tri)
+    }
+}
+
 // Render GeoJSON data through the sphere pipeline
 render_geojson_sphere :: proc(view: ^Viewport, data: ^geojson.GeoJSON) {
     clear(&view.vector_line_buffer)
+    clear(&view.triangle_buffer)
 
     // Build rotation matrix once for all geometry
     rotation := proj.build_view_rotation_matrix(view.projection.centre)
@@ -151,11 +168,25 @@ render_geojson_sphere :: proc(view: ^Viewport, data: ^geojson.GeoJSON) {
         process_geometry_sphere(view, &d, rotation)
     }
 
-    // Render the collected lines
     view_proj := proj.view_proj_matrix(view.camera)
     uniforms := platform.make_uniforms(view_proj)
-    platform.line_renderer_update(&view.render_cache.line_renderer, view.vector_line_buffer[:])
-    platform.line_renderer_draw(&view.render_cache.line_renderer, &uniforms, 1.0)
+
+    // Convert projection type for the fill renderer
+    fill_proj: platform.ProjectionType
+    switch view.projection.type {
+    case .Orthographic:    fill_proj = .Orthographic
+    case .Equirectangular: fill_proj = .Equirectangular
+    }
+
+    // Render filled polygons using stencil-and-cover
+    platform.fill_renderer_update(&view.render_cache.fill_renderer, view.triangle_buffer[:])
+    platform.fill_renderer_draw_stencil(&view.render_cache.fill_renderer, &uniforms)
+    platform.fill_renderer_draw_land(&view.render_cache.fill_renderer, &uniforms, {0.2, 0.5, 0.3, 1.0}, fill_proj)
+    platform.fill_renderer_draw_ocean(&view.render_cache.fill_renderer, &uniforms, {0.1, 0.2, 0.4, 1.0}, fill_proj)
+
+    // Render outlines on top
+    // platform.line_renderer_update(&view.render_cache.line_renderer, view.vector_line_buffer[:])
+    // platform.line_renderer_draw(&view.render_cache.line_renderer, &uniforms, 1.0)
 }
 
 // Process a single geometry through the sphere pipeline
@@ -189,6 +220,7 @@ process_geometry_sphere :: proc(view: ^Viewport, geom: ^geojson.Geometry, rotati
         for ring in g.coordinates {
             projected := process_ring_sphere(([]geojson.Position)(ring), view, rotation)
             if projected != nil {
+            	collect_ring_triangles(&view.triangle_buffer, projected)
                 collect_ring_lines(&view.vector_line_buffer, projected)
                 delete(projected)
             }
@@ -199,6 +231,7 @@ process_geometry_sphere :: proc(view: ^Viewport, geom: ^geojson.Geometry, rotati
             for ring in polygon {
                 projected := process_ring_sphere(([]geojson.Position)(ring), view, rotation)
                 if projected != nil {
+                    collect_ring_triangles(&view.triangle_buffer, projected)
                     collect_ring_lines(&view.vector_line_buffer, projected)
                     delete(projected)
                 }

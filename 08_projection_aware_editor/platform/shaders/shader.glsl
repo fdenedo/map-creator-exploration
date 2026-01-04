@@ -284,3 +284,101 @@ void main() {
 @end
 
 @program fill vs_fill fs_fill
+
+/*
+========================================================================
+    COVER PASS VERTEX SHADER
+    Renders a fullscreen quad, passing world coordinates to fragment shader
+========================================================================
+*/
+@vs vs_cover
+
+layout(binding=0) uniform vs_params {
+    mat4 u_camera_matrix;
+    vec2 u_viewport_size;
+    float u_point_size;
+};
+
+in vec2 position;
+
+out vec2 v_world_pos;
+
+void main() {
+    // Position is in clip space (-1 to 1), we need to convert to world space
+    // by applying inverse of camera matrix
+    // But simpler: pass clip coords, convert in fragment shader
+    
+    // For a fullscreen quad, position comes in as clip coords
+    gl_Position = vec4(position, 0.0, 1.0);
+    
+    // Calculate world position by inverse transforming
+    // Since u_camera_matrix transforms world -> clip, we need clip -> world
+    // For orthographic: inverse is straightforward
+    mat4 inv_camera = inverse(u_camera_matrix);
+    vec4 world_pos = inv_camera * vec4(position, 0.0, 1.0);
+    v_world_pos = world_pos.xy;
+}
+@end
+
+/*
+========================================================================
+    COVER PASS FRAGMENT SHADER
+    Clips to projection bounds and outputs fill color
+========================================================================
+*/
+@fs fs_cover
+
+layout(binding=1) uniform cover_fs_params {
+    vec4 u_fill_color;
+    int u_projection_type;  // 0 = Orthographic, 1 = Equirectangular, etc.
+};
+
+in vec2 v_world_pos;
+out vec4 color;
+
+// Check if world position is within valid projection bounds
+bool is_valid_projection_coord(vec2 world_pos, int proj_type) {
+    if (proj_type == 0) {
+        // Orthographic: valid within unit circle
+        return length(world_pos) <= 1.0;
+    } else if (proj_type == 1) {
+        // Equirectangular: valid within rectangle
+        // Assuming standard bounds: x in [-PI, PI], y in [-PI/2, PI/2]
+        float PI = 3.14159265359;
+        return abs(world_pos.x) <= PI && abs(world_pos.y) <= PI * 0.5;
+    }
+    // Default: allow everything
+    return true;
+}
+
+// Get antialiased alpha at projection boundary
+float get_boundary_alpha(vec2 world_pos, int proj_type) {
+    if (proj_type == 0) {
+        // Orthographic: SDF is distance from unit circle
+        float dist = length(world_pos) - 1.0;
+        float fw = fwidth(dist);
+        return 1.0 - smoothstep(-fw, fw, dist);
+    } else if (proj_type == 1) {
+        // Equirectangular: SDF is distance from rectangle edge
+        float PI = 3.14159265359;
+        float dx = abs(world_pos.x) - PI;
+        float dy = abs(world_pos.y) - PI * 0.5;
+        float dist = max(dx, dy);
+        float fw = fwidth(dist);
+        return 1.0 - smoothstep(-fw, fw, dist);
+    }
+    return 1.0;
+}
+
+void main() {
+    float alpha = get_boundary_alpha(v_world_pos, u_projection_type);
+    
+    if (alpha <= 0.0) {
+        discard;
+    }
+    
+    color = vec4(u_fill_color.rgb, u_fill_color.a * alpha);
+}
+@end
+
+@program cover vs_cover fs_cover
